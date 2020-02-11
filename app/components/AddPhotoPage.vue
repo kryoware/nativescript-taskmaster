@@ -47,33 +47,11 @@
 
             <WrapLayout v-else backgroundColor="red" width="100%">
               <Image
+                v-for="(image, key) in images"
+                :key="key"
+                :src="image"
                 width="50%"
                 height="100%"
-                src="res://icon-76"
-                stretch="aspectFit"
-              />
-              <Image
-                width="50%"
-                height="100%"
-                src="res://icon-76"
-                stretch="aspectFit"
-              />
-              <Image
-                width="50%"
-                height="100%"
-                src="res://icon-76"
-                stretch="aspectFit"
-              />
-              <Image
-                width="50%"
-                height="100%"
-                src="res://icon-76"
-                stretch="aspectFit"
-              />
-              <Image
-                width="50%"
-                height="100%"
-                src="res://icon-76"
                 stretch="aspectFit"
               />
             </WrapLayout>
@@ -95,7 +73,7 @@ import UploadOptions from './UploadOptions'
 export default {
   data() {
     return {
-      images: [1]
+      images: []
     }
   },
   methods: {
@@ -111,6 +89,8 @@ export default {
     compressImage(images) {
       images.forEach(e => {
         let image
+        
+        try {
 
         if (this.$platform.isAndroid) {
           image = e.android
@@ -119,18 +99,29 @@ export default {
         }
 
         const format = image.substr(image.indexOf('.') + 1)
-        const quality = 75
+        const quality = 80
+        } catch (error) {
+          console.error('Compress Image - 1')
+          console.error(error)
+        }
 
         ImageSource.fromAsset(e)
         .then(imageSource => {
-          const fileName = Array(32).fill(0).map(x => Math.random().toString(36).charAt(2)).join('').concat('.', format)
-          const folder = knownFolders.documents().path
-          const filePath = path.join(folder, fileName)
-          const saved = imageSource.saveToFile(filePath, format, quality)
+          try {
+            const fileName = Array(32).fill(0).map(x => Math.random().toString(36).charAt(2)).join('').concat('.', format)
+            const folder = knownFolders.documents().path
+            const filePath = path.join(folder, fileName)
+            const saved = imageSource.saveToFile(filePath, format, quality)
 
-          if (saved) {
-            this.user.profile_image = filePath
-            this.profile_image = fileName
+            if (saved) {
+              console.warn({ fileName })
+              console.warn({ filePath })
+
+              this.images.push(filePath)
+            }
+          } catch (error) {
+            console.error('Compress Image')
+            console.error(error)
           }
         })
         .catch(error => {
@@ -139,10 +130,10 @@ export default {
         })
       })
     },
-    async takePictureHandler(e) {
-      await this.compressImage([e])
+    takePictureHandler(e) {
+      this.compressImage([e])
     },
-    closeCallback(args) {
+    closeCallback(result) {
       switch(parseInt(result)) {
         case 0:
           var takePictureHandler = this.takePictureHandler
@@ -159,13 +150,12 @@ export default {
                 saveToGallery: true
               }
 
-              camera
-              .takePicture(options)
-              .then(takePictureHandler)
-              .catch(function (err) {
-                Sentry.captureException(err)
-                console.error(err.message)
-              })
+              camera.takePicture(options)
+                .then(takePictureHandler)
+                .catch(function (err) {
+                  Sentry.captureException(err)
+                  console.error(err.message)
+                })
             },
             function failure() {
               // permission request rejected
@@ -173,13 +163,13 @@ export default {
             })
           break
         case 1:
-          const farmPhotos = imagepicker.create({ mediaType: 'Image' })
+          const picker = imagepicker.create({ mediaType: 'Image' })
 
-          farmPhotos
-          .authorize()
-          .then(() => farmPhotos.present())
-          .then(selection => this.compressImage(selection))
-          .catch(e => console.error(e))
+          picker
+            .authorize()
+            .then(() => picker.present())
+            .then(selection => this.compressImage(selection))
+            .catch(e => console.error(e))
           break
       }
     }

@@ -19,6 +19,7 @@
     "moment": "^2.24.0",
     "momentjs": "^2.0.0",
     "nativescript-camera": "^4.5.0",
+    "nativescript-dna-deviceinfo": "^2.4.3",
     "nativescript-geolocation": "^5.1.0",
     "nativescript-google-maps-sdk": "^2.9.1",
     "nativescript-imagepicker": "^7.1.0",

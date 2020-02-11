@@ -1,8 +1,8 @@
 <template>
-  <Page backgroundColor="#2e7d32">
-    <ActionBar title="" icon="" flat="true" backgroundColor="#2e7d32">
+  <Page backgroundColor="#f5f5f5">
+    <ActionBar title="" icon="" flat="true" backgroundColor="transparent">
       <NavigationButton text="Back" icon="res://baseline_arrow_back_24" @tap="$navigateBack" />
-      <Label text="New Task" fontSize="24" class="tx-bold" color="white" textAlignment="center" width="100%"/>
+      <Label text="New Task" fontSize="24" class="tx-bold" color="#2e7d32" textAlignment="center" width="100%"/>
     </ActionBar>
 
     <StackLayout>
@@ -13,15 +13,15 @@
             <MDTextField
               floating="false"
               hint="Task"
-              :text="title"
+              :text="task.task_title"
               @textChange="({ value }) => { this.title = value }"
-              strokeColor="white"
+              strokeColor="#2e7d32"
 
-              placeholderColor="white"
+              placeholderColor="#2e7d32"
               paddingTop="0"
               paddingLeft="0"
               paddingRight="0"
-              color="white"
+              color="#2e7d32"
               marginBottom="16"
               class="tx-bold"
               backgroundColor="transparent"
@@ -30,16 +30,16 @@
 
             <MDTextField
               floating="false"
-              :text="customer"
+              :text="task.customer"
               @textChange="({ value }) => { this.customer = value }"
               hint="Customer"
-              strokeColor="white"
+              strokeColor="#2e7d32"
               paddingTop="0"
               paddingLeft="0"
               paddingRight="0"
 
-              placeholderColor="white"
-              color="white"
+              placeholderColor="#2e7d32"
+              color="#2e7d32"
               class="tx-regular"
               backgroundColor="transparent"
               fontSize="18"
@@ -47,15 +47,14 @@
           </StackLayout>
           <!-- Task Details -->
 
-          <StackLayout backgroundColor="white" borderRadius="32" padding="24" marginLeft="8" marginRight="8" marginBottom="8">
+          <StackLayout backgroundColor="white" borderRadius="32" padding="16" marginLeft="8" marginRight="8">
             <MDTextField
               hint="Instructions"
-              :text="instructions"
-              @textChange="({ value }) => { this.instructions = value }"
               @loaded="initMultiline"
               
+              :text="task.instructions"
               errorEnabled="true"
-              floating="false"
+              floating="true"
 
               placeholderColor="#808080"
               strokeColor="#2e7d32"
@@ -71,12 +70,11 @@
 
             <MDTextField
               hint="Address"
-              :text="address"
-              @textChange="({ value }) => { this.address = value }"
               @loaded="initMultiline"
               
+              :text="task.location"
               errorEnabled="true"
-              floating="false"
+              floating="true"
 
               placeholderColor="#808080"
               strokeColor="#2e7d32"
@@ -92,12 +90,11 @@
 
             <MDTextField
               hint="Notes"
-              :text="notes"
-              @textChange="({ value }) => { this.notes = value }"
               @loaded="initMultiline"
               
+              :text="task.notes"
               errorEnabled="true"
-              floating="false"
+              floating="true"
 
               placeholderColor="#808080"
               strokeColor="#2e7d32"
@@ -108,10 +105,10 @@
               paddingLeft="0"
               paddingRight="0"
               class="tx-regular"
-              marginBottom="24"
+              marginBottom="16"
             />
 
-            <FlexboxLayout justifyContent="center">
+            <FlexboxLayout v-if="!isCheckedIn" justifyContent="center">
               <MDButton
                 text="Check In"
                 color="white"
@@ -120,11 +117,81 @@
                 padding="16 32"
                 borderRadius="48"
                 width="75%"
-                class="tx-regular"
+                class="tx-bold"
                 @tap="onCheckInTap"
               />
             </FlexboxLayout>
+
+            <StackLayout v-else>
+              <FlexboxLayout justifyContent="space-between">
+                <MDButton
+                  text="Check Out"
+                  color="white"
+                  backgroundColor="#f9a825"
+                  variant="flat"
+                  padding="16 32"
+                  borderRadius="48"
+                  class="tx-bold"
+                  flexShrink="1"
+                  />
+                <MDButton
+                  text="Pause"
+                  color="white"
+                  backgroundColor="#757575"
+                  variant="flat"
+                  padding="16 32"
+                  borderRadius="48"
+                  class="tx-bold"
+                  flexShrink="1"
+                  />
+              </FlexboxLayout>
+            </StackLayout>
           </StackLayout>
+
+          <FlexboxLayout margin="16 8 16 8" flexGrow="1" justifyContent="space-between">
+            <MDButton
+              v-if="!isCheckedIn"
+              text="View Map"
+              color="#2e7d32"
+              rippleColor="#2e7d32"
+              backgroundColor="white"
+              variant="flat"
+              padding="16 32"
+              borderRadius="48"
+              class="tx-bold"
+              flexShrink="1"
+              @tap="() => {}"
+            />
+
+            <MDButton
+              v-if="isCheckedIn"
+              text="Add Photo"
+              color="#2e7d32"
+              rippleColor="#2e7d32"
+              backgroundColor="white"
+              variant="flat"
+              padding="16 32"
+              borderRadius="48"
+              class="tx-bold"
+              flexShrink="1"
+              @tap="() => {}"
+            />
+
+            <MDButton
+              v-if="isCheckedIn"
+              text="Add Report"
+              color="#2e7d32"
+              rippleColor="#2e7d32"
+              backgroundColor="white"
+              variant="flat"
+              padding="16 32"
+              borderRadius="48"
+              class="tx-bold"
+              flexShrink="1"
+              @tap="() => {}"
+            />
+
+          </FlexboxLayout>
 
         </StackLayout>
       </ScrollView>
@@ -138,11 +205,14 @@ import { mapActions } from 'vuex'
 export default {
   data() {
     return {
-      address: null,
-      notes: null,
-      instructions: null,
-      title: null,
-      customer: null
+      isCheckedIn: false,
+      task: {
+        address: null,
+        notes: null,
+        instructions: null,
+        task_title: null,
+        customer: null
+      }
     }
   },
   methods: {
@@ -163,20 +233,20 @@ export default {
       }
     },
     onCheckInTap(args) {
-      console.warn('test')
       const {
         address,
         notes,
         instructions,
-        title,
+        task_title,
         customer
-      } = this
+      } = this.task
 
+      this.isCheckedIn = true
       this.addTask({
         address,
         notes,
         instructions,
-        title,
+        task_title,
         customer,
         date: new Date()
       })

@@ -77,7 +77,7 @@
         </StackLayout>
 
         <StackLayout v-if="tabIndex === 1">
-          <StatusPage />
+          <StatusPage :connection="connection" />
         </StackLayout>
       </StackLayout>
 
@@ -88,8 +88,8 @@
         inactiveColor="#2b2b2b"
         backgroundColor="white"
         @tabSelected="tabSelected">
-        <MDBottomNavigationTab title="Tasks" icon="ic_home" />
-        <MDBottomNavigationTab title="Status" icon="ic_view_list" />
+        <MDBottomNavigationTab title="Tasks" icon="ic_task" />
+        <MDBottomNavigationTab title="Debug Upload" icon="ic_info" />
       </MDBottomNavigationBar>
 
     </GridLayout>
@@ -120,6 +120,7 @@ import TaskDetails from './TaskDetails'
 import AddTaskPage from './AddTaskPage'
 import StatusPage from './StatusPage'
 import TaskCard from './TaskCard'
+import { DeviceInfo } from 'nativescript-dna-deviceinfo'
 
 export default {
   components: {
@@ -133,7 +134,8 @@ export default {
       foregroundTracking: null,
 
       tabIndex: 0,
-      tasks: []
+      tasks: [],
+      connection: null
     }
   },
   // computed: {
@@ -160,13 +162,10 @@ export default {
           console.warn('Check SSID')
           console.warn('---')
 
-          // try {
-          //   const wifiInfo = new WifiInfo();
-          //   const ssid = wifiInfo.getSSID();
-          //   console.warn(ssid)
-          // } catch (error) {
-          //   console.error(error)
-          // }
+          this.connection = {
+            type: 'WIFI',
+            ssid: DeviceInfo.wifiSSID(),
+          }
         } else {
           console.warn('Stop Uploading')
         }
@@ -195,6 +194,7 @@ export default {
     })
 
     this.isFirstRun = this.$appSettings.hasKey('first_run') && this.$appSettings.getBoolean('first_run')
+    console.warn({ isFirstRun })
 
     fetch('http://dev.teaconcepts.net/WorkForce/engine/api.php?ac=dev&dc=dev&ak=dev&ver=1&act=ini')
       .then(res => {
@@ -280,7 +280,7 @@ export default {
 }
 </script>
 
-<style lang="scss" scoped>
+<style lang="scss">
 .paper-tp {
   border-top-left-radius: 24;
   border-top-right-radius: 24;

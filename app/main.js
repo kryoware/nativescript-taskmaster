@@ -31,13 +31,16 @@ Vue.use(ButtonPlugin)
 // Nativescript Core
 import { connectionType, getConnectionType } from 'connectivity'
 import * as appSettings from 'tns-core-modules/application-settings'
-
+import { screen } from 'tns-core-modules/platform/platform'
+import * as platform from 'tns-core-modules/platform'
 
 Vue.prototype.$isConnected = () => getConnectionType() === connectionType.wifi
 Vue.prototype.$appSettings = appSettings
 // Nativescript Core
 
 // Helpers
+Vue.prototype.$screen = screen
+Vue.prototype.$platform = platform
 Vue.prototype.$randString = (length) => Array(length).fill(0).map(x => Math.random().toString(36).charAt(2)).join('')
 
 // Helpers

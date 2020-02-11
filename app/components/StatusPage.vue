@@ -1,12 +1,44 @@
 <template>
-  <StackLayout>
-    <Label text="Status" />
-  </StackLayout>
+  <FlexboxLayout flexDirection="column">
+    <StackLayout margin="24" flexShrink="1">
+      <Label :text="`Connection Type: ${connection.type}`" />
+      <Label :text="`SSID: ${connection.ssid}`" />
+    </StackLayout>
+    <StackLayout height="25%">
+      <Label text="Current Batch" textAlignment="center" class="tx-medium" padding="8 0" fontSize="18"/>
+      <StackLayout>
+        <Progress marginLeft="24" marginRight="24" />
+        <Label text="0 KB of - KB" class="tx-regular" textAlignment="center" />
+      </StackLayout>
+    </StackLayout>
+
+    <StackLayout height="25%">
+      <Label text="Next Batch" textAlignment="center" class="tx-medium" padding="8 0" fontSize="18"/>
+      <StackLayout>
+        <Progress marginLeft="24" marginRight="24" />
+        <Label text="0 KB of - KB" class="tx-regular" textAlignment="center" />
+      </StackLayout>
+    </StackLayout>
+
+    <StackLayout height="25%">
+      <Label text="Pending" textAlignment="center" class="tx-medium" padding="8 0" fontSize="18"/>
+      <StackLayout>
+        <Progress marginLeft="24" marginRight="24" />
+        <Label text="0 KB of - KB" class="tx-regular" textAlignment="center" />
+      </StackLayout>
+    </StackLayout>
+
+  </FlexboxLayout>
 </template>
 
 <script>
 export default {
-
+  props: {
+    connection: {
+      type: Object,
+      required: true
+    }
+  }
 }
 </script>
 

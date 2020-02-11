@@ -98,7 +98,7 @@
                 padding="16 32"
                 borderRadius="48"
                 width="75%"
-                class="tx-medium"
+                class="tx-bold"
                 @tap="onCheckInTap"
               />
             </FlexboxLayout>
@@ -112,7 +112,7 @@
                   variant="flat"
                 padding="16 32"
                   borderRadius="48"
-                  class="tx-regular"
+                  class="tx-bold"
                   flexShrink="1"
                   />
                 <MDButton
@@ -122,7 +122,7 @@
                   variant="flat"
                 padding="16 32"
                   borderRadius="48"
-                  class="tx-regular"
+                  class="tx-bold"
                   flexShrink="1"
                   />
               </FlexboxLayout>
@@ -139,7 +139,7 @@
               variant="flat"
               padding="16 32"
               borderRadius="48"
-              class="tx-regular"
+              class="tx-bold"
               flexShrink="1"
               @tap="onViewMapTap"
             />
@@ -153,7 +153,7 @@
               variant="flat"
               padding="16 32"
               borderRadius="48"
-              class="tx-regular"
+              class="tx-bold"
               flexShrink="1"
               @tap="onAddPhotoTap"
             />
@@ -167,7 +167,7 @@
               variant="flat"
               padding="16 32"
               borderRadius="48"
-              class="tx-regular"
+              class="tx-bold"
               flexShrink="1"
               @tap="onAddReportTap"
             />
@@ -185,6 +185,7 @@ import { mapActions } from 'vuex'
 
 import MapPage from './MapPage'
 import AddPhotoPage from './AddPhotoPage'
+import AddReport from './AddReport'
 
 export default {
   props: {
@@ -195,7 +196,8 @@ export default {
   },
   data() {
     return {
-      isCheckedIn: false
+      isCheckedIn: false,
+      report: ''
     }
   },
   mounted() {
@@ -217,8 +219,18 @@ export default {
         }
       })
     },
+    closeCallback(report) {
+      console.warn({ report })
+    },
     onAddReportTap(args) {
+      const { closeCallback, report } = this
 
+      this.$showBottomSheet(AddReport, {
+        props: {
+          closeCallback,
+          report
+        }
+      })
     },
     initMultiline(args) {
       try {
