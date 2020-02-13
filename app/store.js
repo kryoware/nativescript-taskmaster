@@ -6,97 +6,42 @@ Vue.use(Vuex);
 export default new Vuex.Store({
   state: {
     isConnected: false,
-    tasks: [
-      {
-        "address": "An address",
-        "notes": "A few notes",
-        "instructions": "Some Instructions",
-        "title": "New Task Title",
-        "customer": "New Customer Name",
-        "status":"started",
-        "date": "2020-02-09T15:41:26.282Z"
-      },
-      {
-        "address": "An address",
-        "notes": "A few notes",
-        "instructions": "Some Instructions",
-        "title": "New Task Title",
-        "customer": "New Customer Name",
-        "status":"paused",
-        "date": "2020-02-09T15:41:26.282Z"
-      },
-      {
-        "address": "An address",
-        "notes": "A few notes",
-        "instructions": "Some Instructions",
-        "title": "New Task Title",
-        "customer": "New Customer Name",
-        "status":"done",
-        "date": "2020-02-09T15:41:26.282Z"
-      },
-      {
-        "address": "An address",
-        "notes": "A few notes",
-        "instructions": "Some Instructions",
-        "title": "New Task Title",
-        "customer": "New Customer Name",
-        "status":"pending",
-        "date": "2020-02-09T15:41:26.282Z"
-      },
-      {
-        "address": "An address",
-        "notes": "A few notes",
-        "instructions": "Some Instructions",
-        "title": "New Task Title",
-        "customer": "New Customer Name",
-        "status":"started",
-        "date": "2020-02-09T15:41:26.282Z"
-      },
-      {
-        "address": "An address",
-        "notes": "A few notes",
-        "instructions": "Some Instructions",
-        "title": "New Task Title",
-        "customer": "New Customer Name",
-        "status":"paused",
-        "date": "2020-02-09T15:41:26.282Z"
-      },
-      {
-        "address": "An address",
-        "notes": "A few notes",
-        "instructions": "Some Instructions",
-        "title": "New Task Title",
-        "customer": "New Customer Name",
-        "status":"done",
-        "date": "2020-02-09T15:41:26.282Z"
-      },
-      {
-        "address": "An address",
-        "notes": "A few notes",
-        "instructions": "Some Instructions",
-        "title": "New Task Title",
-        "customer": "New Customer Name",
-        "status":"pending",
-        "date": "2020-02-09T15:41:26.282Z"
-      }
-    ]
+    tasks: [],
+    config: {},
+    dt_tasks: null
   },
   mutations: {
     addTask: (state, task) => {
-      console.warn("mutation", task)
       state.tasks.push(task)
     },
     setConnected: (state, status) => {
       state.isConnected = status
+    },
+    setConfig: (state, config) => {
+      state.config = config
+    },
+    setTasks: (state, tasks) => {
+      state.tasks = tasks
+    },
+    setTaskTimestamp: (state, dt_tasks) => {
+      state.dt_tasks = dt_tasks
     }
   },
   actions: {
     addTask: ({ commit }, task) => {
-      console.warn("action", task)
       commit("addTask", task)
     },
     setConneced: ({ commit }, status) => {
       commit("setConnected", status)
+    },
+    setConfig: ({ commit }, config) => {
+      commit("setConfig", config)
+    },
+    setTasks: ({ commit }, tasks) => {
+      commit("setTasks", tasks)
+    },
+    setTaskTimestamp: ({ commit }, dt_tasks) => {
+      commit("setTaskTimestamp", dt_tasks)
     }
   }
 });

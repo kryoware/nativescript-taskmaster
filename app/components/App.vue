@@ -122,6 +122,8 @@ import StatusPage from './StatusPage'
 import TaskCard from './TaskCard'
 import { DeviceInfo } from 'nativescript-dna-deviceinfo'
 
+import { getJSON, request, HttpResponse } from "tns-core-modules/http"
+
 export default {
   components: {
     TaskCard,
@@ -131,18 +133,27 @@ export default {
     return {
       allowExecution: false,
       isFirstRun: false,
+      isConnected: false,
       foregroundTracking: null,
+
+      fileIntervalId: null,
+      dataIntervalId: null,
+
+      homeNetwork: 'AndroidWifi',
 
       tabIndex: 0,
       tasks: [],
-      connection: null
+      connection: null,
     }
   },
-  // computed: {
-  //   ...mapState({
-  //     tasks: state => state.tasks
-  //   })
-  // },
+  computed: {
+    ...mapState({
+      tasks: state => state.tasks,
+      config: state => state.config,
+      dt_tasks: state => state.dt_tasks,
+      dt_config: state => state.config.dt_config,
+    })
+  },
   destroyed() {
     if (this.foregroundTracking) {
       geolocation.clearWatch(this.foregroundTracking)
@@ -151,6 +162,21 @@ export default {
     stopMonitoring()
   },
   mounted() {
+    this.isFirstRun = this.$appSettings.hasKey('first_run') && this.$appSettings.getBoolean('first_run')
+    console.warn({ isFirstRun })
+
+    if (this.$appSettings.hasKey('config')) {
+      try {
+        const config = JSON.parse(this.$appSettings.getString('config'))
+
+        console.warn({ config })
+
+        this.setConfig(config)
+      } catch (error) {
+        console.error(error)
+      }
+    }
+
     geolocation.enableLocationRequest(true, true).then(() => {
       console.warn('User Enabled Location Service')
 
@@ -162,12 +188,23 @@ export default {
           console.warn('Check SSID')
           console.warn('---')
 
+          const ssid = DeviceInfo.wifiSSID()
+
           this.connection = {
             type: 'WIFI',
-            ssid: DeviceInfo.wifiSSID(),
+            ssid,
+          }
+
+          if (ssid === homeNetwork) {
+            this.isConnected = true
+            this.startProcessing()
+          } else {
+            // Connected to wifi but not whitelisted
+            this.isConnected = false
           }
         } else {
           console.warn('Stop Uploading')
+          this.isConnected = false
         }
       })
 
@@ -193,18 +230,52 @@ export default {
       console.error('Unable to Enable Location', ex)
     })
 
-    this.isFirstRun = this.$appSettings.hasKey('first_run') && this.$appSettings.getBoolean('first_run')
-    console.warn({ isFirstRun })
-
     fetch('http://dev.teaconcepts.net/WorkForce/engine/api.php?ac=dev&dc=dev&ak=dev&ver=1&act=ini')
       .then(res => {
         res.json()
           .then(resJSON => {
             if (resJSON.stat === 'ok') {
               if (resJSON.data) {
-                // TODO: handle config
 
-                this.tasks = Object.values(resJSON.data.tasks)
+                if (resJSON.data.configs) {
+                  console.warn('--- CONFIG ---')
+                  console.warn(resJSON.data.configs)
+
+                  this.setConfig(resJSON.data.configs)
+                  this.$appSettings.setString('config', JSON.stringify(res.data.configs))
+                }
+
+                if (resJSON.data.dt_tasks) {
+                  this.setTaskTimestamp(resJSON.data.dt_tasks)
+                }
+
+                console.warn('--- TASKS ---')
+                console.warn(resJSON.data.configs)
+
+                let tasks = Object.values(resJSON.data.tasks)
+                  .map(task => {
+                    console.warn({ task })
+
+                    if (parseInt(task.uid) === 0 || task.status === 'pending') {
+                      const currTask = this.tasks.filter(vTask => {
+                        console.warn({vTask})
+
+                        return vTask.task_id === task.task_id
+                      })
+
+                      console.warn('--- BEFORE ---')
+                      console.warn({ task })
+                      task = { ...currTask, ...task }
+                      console.warn('--- AFTER ---')
+                      console.warn({ task })
+                    }
+
+                    return task
+                  })
+
+                // TODO: Handle duplicates / active etc.
+
+                this.setTasks(tasks)
               }
             } else {
               console.error('API Error', resJSON)
@@ -253,6 +324,85 @@ export default {
     // })
   },
   methods: {
+    stopProccessing() {
+      this.intervals.forEach(intervalId => clearInterval(intervalId))
+    },
+    startProcessing() {
+      console.warn('--- START ---')
+      console.warn({ config: this.config })
+
+      this.intervals.push(setInterval(function () {
+        // DATA
+      }, this.config.int_upload_data * 1000))
+
+      this.intervals.push(setInterval(function () {
+        // GPS
+      }, this.config.int_gps * 1000))
+
+      this.intervals.push(setInterval(function () {
+        // FILE
+      }, this.config.int_upload_files * 1000))
+      
+      this.intervals.push(setInterval(function () {
+        const params = '?'.concat([
+          'ac=' + this.accountCode,
+          'dc=' + this.deviceCode,
+          'ak=' + this.apiKey,
+          'ver=' + this.version,
+          'dt_tasks=' + this.dt_tasks,
+          'dt_config=' + this.dt_config,
+          'act=stat_check',
+        ].join('&'))
+
+        console.warn({ params })
+        
+        fetch(this.apiUrl.concat(params)).then(body => {
+          body.json().then(res => {
+            if (res.stat.toLowerCase() === "update" && res.data) {
+              // update config
+              if (res.data.configs) {
+                console.warn(res.data.configs)
+
+                this.setConfig(res.data.configs)
+                this.$appSettings.setString('config', JSON.stringify(res.data.configs))
+              }
+
+              // update tasks
+              if (res.data.tasks) {
+                console.warn(res.data.tasks)
+                let tasks = Object.values(res.data.tasks)
+                  .map(task => {
+                    console.warn({ task })
+
+                    if (parseInt(task.uid) === 0 || task.status === 'pending') {
+                      const currTask = this.tasks.filter(vTask => {
+                        console.warn({vTask})
+
+                        return vTask.task_id === task.task_id
+                      })
+
+                      console.warn('--- BEFORE ---')
+                      console.warn({ task })
+                      task = { ...currTask, ...task }
+                      console.warn('--- AFTER ---')
+                      console.warn({ task })
+                    }
+
+                    return task
+                  })
+
+                this.setTaskTimestamp(res.data.dt_tasks)
+                this.setTasks(tasks)
+              }
+            }
+          })
+          .catch(error => console.error(error))
+        })
+        .catch(error => console.error(error))
+      }, this.config.int_statcheck * 1000))
+
+      console.warn(this.intervals)
+    },
     tabSelected({ newIndex }) {
       this.tabIndex = newIndex
     },
