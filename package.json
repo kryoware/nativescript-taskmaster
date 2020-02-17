@@ -27,6 +27,7 @@
     "nativescript-material-bottomsheet": "^3.1.5",
     "nativescript-material-button": "^3.1.5",
     "nativescript-material-cardview": "^3.1.5",
+    "nativescript-material-dialogs": "^3.1.5",
     "nativescript-material-floatingactionbutton": "^3.1.5",
     "nativescript-material-snackbar": "^3.1.5",
     "nativescript-material-textfield": "^3.1.5",

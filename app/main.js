@@ -42,7 +42,36 @@ Vue.prototype.$appSettings = appSettings
 Vue.prototype.$screen = screen
 Vue.prototype.$platform = platform
 Vue.prototype.$randString = (length) => Array(length).fill(0).map(x => Math.random().toString(36).charAt(2)).join('')
+Vue.prototype.$callApi = (action, method, headers) => {
+  let options = { method, mode: 'cors' }
 
+  const url = this.$appSettings.getString('url')
+  const ver = this.$appSettings.getString('ver')
+  const ak = this.$appSettings.getString('ak')
+  const ac = this.$appSettings.getString('ac')
+  const dc = this.$appSettings.getString('dc')
+
+  let params = [
+    'act='.concat(action),
+    'url='.concat(url),
+    'ver='.concat(ver),
+    'ak='.concat(ak),
+    'ac='.concat(ac),
+    'dc='.concat(dc),
+  ].join('&')
+
+  console.warn('--- MAIN ---')
+  console.warn({ params })
+
+  if (headers != null) {
+    options = { ...options, ...{ headers } }
+  }
+
+  console.warn({ options })
+  console.warn('--- MAIN ---')
+
+  return fetch(`${url}/engine/api.php?${params}`, options)
+}
 // Helpers
 
 Vue.registerElement('MapView', () => require('nativescript-google-maps-sdk').MapView)
