@@ -108,8 +108,9 @@
               marginBottom="16"
             />
 
-            <FlexboxLayout v-if="!isCheckedIn" justifyContent="center">
+            <FlexboxLayout justifyContent="center">
               <MDButton
+                v-if="!isCheckedIn && isSaved"
                 text="Check In"
                 color="white"
                 backgroundColor="#2e7d32"
@@ -120,9 +121,21 @@
                 class="tx-bold"
                 @tap="onCheckInTap"
               />
+              <MDButton
+                v-else
+                text="Save"
+                color="white"
+                backgroundColor="#03A9F4"
+                variant="flat"
+                padding="16 32"
+                borderRadius="48"
+                width="75%"
+                class="tx-bold"
+                @tap="onSaveTap"
+              />
             </FlexboxLayout>
 
-            <StackLayout v-else>
+            <StackLayout v-if="!isCheckedIn && isSaved">
               <FlexboxLayout justifyContent="space-between">
                 <MDButton
                   text="Check Out"
@@ -205,6 +218,7 @@ import { mapActions } from 'vuex'
 export default {
   data() {
     return {
+      isSaved: false,
       isCheckedIn: false,
       task: {
         address: null,
@@ -219,6 +233,11 @@ export default {
     ...mapActions([
       'addTask'
     ]),
+    onSaveTap() {
+      console.warn('save tap')
+      // add to vuex
+      // insert into sqlite
+    },
     initMultiline(args) {
       try {
         const input = args.object.android.getEditText()
@@ -233,6 +252,9 @@ export default {
       }
     },
     onCheckInTap(args) {
+      // update vuex
+      // update sqlite
+      
       const {
         address,
         notes,

@@ -42,33 +42,30 @@ Vue.prototype.$appSettings = appSettings
 Vue.prototype.$screen = screen
 Vue.prototype.$platform = platform
 Vue.prototype.$randString = (length) => Array(length).fill(0).map(x => Math.random().toString(36).charAt(2)).join('')
-Vue.prototype.$callApi = (action, method, headers) => {
+Vue.prototype.$callApi = (action, method, extras, headers) => {
   let options = { method, mode: 'cors' }
 
-  const url = this.$appSettings.getString('url')
-  const ver = this.$appSettings.getString('ver')
-  const ak = this.$appSettings.getString('ak')
-  const ac = this.$appSettings.getString('ac')
-  const dc = this.$appSettings.getString('dc')
+  const url = appSettings.getString('url')
+  const ver = appSettings.getString('ver')
+  const ak = appSettings.getString('ak')
+  const ac = appSettings.getString('ac')
+  const dc = appSettings.getString('dc')
 
   let params = [
-    'act='.concat(action),
-    'url='.concat(url),
-    'ver='.concat(ver),
-    'ak='.concat(ak),
-    'ac='.concat(ac),
-    'dc='.concat(dc),
-  ].join('&')
-
-  console.warn('--- MAIN ---')
-  console.warn({ params })
+    'act='.concat(encodeURI(action)),
+    'ver='.concat(encodeURI(ver)),
+    'ak='.concat(encodeURI(ak)),
+    'ac='.concat(encodeURI(ac)),
+    'dc='.concat(encodeURI(dc)),
+  ]
+  .concat(extras)
+  .join('&')
 
   if (headers != null) {
     options = { ...options, ...{ headers } }
   }
 
-  console.warn({ options })
-  console.warn('--- MAIN ---')
+  console.error(`${url}/engine/api.php?${params}`)
 
   return fetch(`${url}/engine/api.php?${params}`, options)
 }

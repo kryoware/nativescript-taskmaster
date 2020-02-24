@@ -4,7 +4,7 @@
       <StackLayout v-if="isFirstRun">
         <FlexboxLayout class="paper-bt" backgroundColor="white" justifyContent="space-between" paddingLeft="16" paddingRight="16" height="64">
           <FlexboxLayout flexDirection="column" justifyContent="center" height="48">
-            <Label text="Config" fontSize="24" class="tx-bold" color="#2e7d32" />
+            <Label text="Config" fontSize="24" class="tx-bold" color="#2e7d32" @tap="logGPS" />
           </FlexboxLayout>
         </FlexboxLayout>
 
@@ -214,7 +214,7 @@ export default {
       apiUrl: 'http://dev.teaconcepts.net/WorkForce',
       accountCode: 'dev',
       deviceCode: 'dev',
-      apiKey: 'key',
+      apiKey: 'dev',
       version: 1,
 
       errors: {
@@ -252,18 +252,12 @@ export default {
   },
   mounted() {
     this.isFirstRun = !this.$appSettings.hasKey('first_run') || this.$appSettings.getBoolean('first_run')
-    console.error('config', this.$appSettings.getString('config'))
 
     if (this.$appSettings.hasKey('config')) {
       try {
         const config = JSON.parse(this.$appSettings.getString('config'))
 
-        console.warn({ config })
-
         this.setConfig(config)
-
-      geolocation.enableLocationRequest(true, true).then(() => {
-        console.warn('User Enabled Location Service')
 
         // Monitor Connection -- if it switches to wifi or loses connection
         // startMonitoring((conn) => {
@@ -282,6 +276,7 @@ export default {
 
         //     if (ssid === homeNetwork) {
         //       this.isConnected = true
+
               if (this.$appSettings.hasKey('url')) {
                 this.startProcessing()
               }
@@ -294,85 +289,38 @@ export default {
         //     this.isConnected = false
         //   }
         // })
-      }, (e) => {
-        console.error('Error: ' + (e.message || e))
-      }).catch(ex => {
-        console.error('Unable to Enable Location', ex)
-      })
+
+        const vueInstance = this
+
+        console.warn("[SQLITE] Initialize")
+        new SQLite('offline_sync.db').then(db => {
+          console.warn("[SQLITE] CONNECTED")
+          vueInstance.database = db
+
+          db.execSQL("CREATE TABLE IF NOT EXISTS gps_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp VARCHAR(500), latitude VARCHAR(500), longitude VARCHAR(500))")
+          .then(result => {
+            console.warn("[SQLITE] CREATE GPS LOGS TABLE: ", result)
+          },
+          error => console.error("[SQLITE] CREATE GPS LOGS TABLE: ", error))
+
+          db.execSQL("CREATE TABLE IF NOT EXISTS pending_uploads (id INTEGER PRIMARY KEY AUTOINCREMENT, filename VARCHAR(500))")
+          .then(result => {
+            console.warn("[SQLITE] CREATE UPLOADS TABLE: ", result)
+          },
+          error => console.error("[SQLITE] CREATE UPLOADS TABLE: ", error))
+
+          db.execSQL("CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title VARCHAR(500), customer VARCHAR(500), address VARCHAR(500), notes VARCHAR(500), instructions VARCHAR(500), date VARCHAR(500))")
+          .then(result => {
+            console.warn("[SQLITE] CREATE TASKS TABLE: ", result)
+
+          },
+          error => console.error("[SQLITE] CREATE TASKS TABLE: ", error))
+        },
+        error => console.error("[SQLITE] CONNECT: ", error))
       } catch (error) {
         console.error(error)
       }
     }
-
-
-    // fetch('http://dev.teaconcepts.net/WorkForce/engine/api.php?ac=dev&dc=dev&ak=dev&ver=1&act=ini')
-    //   .then(res => {
-    //     res.json()
-    //       .then(resJSON => {
-    //         if (resJSON.stat === 'ok') {
-    //           if (resJSON.data) {
-    //             if (resJSON.data.hasOwnProperty('configs')) {
-    //               this.setConfig(resJSON.data.configs)
-    //               this.$appSettings.setString('config', JSON.stringify(resJSON.data.configs))
-    //             }
-
-    //             if (resJSON.data.hasOwnProperty('dt_tasks')) {
-    //               this.setTaskTimestamp(resJSON.data.dt_tasks)
-    //             }
-
-    //             if (resJSON.data.hasOwnProperty('tasks')) {
-    //               let tasks = Object.values(resJSON.data.tasks)
-    //                 .map(task => {
-    //                   console.warn({ task })
-
-    //                   if (parseInt(task.uid) === 0 || task.status === 'pending') {
-    //                     const currTask = this.tasks.filter(vTask => {
-    //                       console.warn({vTask})
-
-    //                       return vTask.task_id === task.task_id
-    //                     })
-
-    //                     console.warn('--- BEFORE ---')
-    //                     console.warn({ task })
-    //                     task = { ...currTask, ...task }
-    //                     console.warn('--- AFTER ---')
-    //                     console.warn({ task })
-    //                   }
-
-    //                   return task
-    //                 })
-
-    //               // TODO: Handle duplicates / active etc.
-
-    //               this.setTasks(tasks)
-    //             }
-    //           }
-    //         } else {
-    //           console.error('API Error', resJSON)
-    //         }
-    //       })
-    //       .catch(err => console.error(err))
-    //   })
-    //   .catch(err => console.error(err))
-
-    // new SQLite('offline_sync.db').then(db => {
-    //   console.warn(db)
-    //   db.execSQL("CREATE TABLE IF NOT EXISTS local_tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title VARCHAR(250), customer VARCHAR(250))")
-    //   .then(id => {
-    //     page.bindingContext = createViewModel(db);
-    //   },
-    //   error => {
-    //     console.error("CREATE TABLE: ", error);
-    //   })
-    // },
-    // error => {
-    //   console.error(error)
-    // })
-
-    // if (platform.isIOS) {
-    //   this.allowExecution = true;
-    //   return;
-    // }
 
     // permissions
     //   .requestPermissions([
@@ -438,29 +386,186 @@ export default {
           if (res.status === 200) {
             res.json().then(data => {
               if (data.data) {
-                console.warn('save config')
+                try {
+                  console.warn('[APP] Save Config')
 
-                this.$appSettings.setString('config', JSON.stringify(data.data.configs))
-                console.warn(this.$appSettings.getString('config'))
-                this.$appSettings.setBoolean('first_run', false)
+                  this.$appSettings.setString('config', JSON.stringify(data.data.configs))
+                  this.$appSettings.setBoolean('first_run', false)
+                  this.$appSettings.setString('ac', accountCode)
+                  this.$appSettings.setString('dc', deviceCode)
+                  this.$appSettings.setString('ver', version.toString())
+                  this.$appSettings.setString('url', apiUrl)
+                  this.$appSettings.setString('ak', apiKey)
 
-                this.$appSettings.setString('ac', accountCode)
-                this.$appSettings.setString('dc', deviceCode)
-                this.$appSettings.setString('ver', version)
-                this.$appSettings.setString('url', apiUrl)
-                this.$appSettings.setString('ak', apiKey)
-
-                this.setConfig(data.data.configs)
+                  this.setConfig(data.data.configs)
+                  this.isFirstRun = false
+                  this.startProcessing()
+                } catch (error) {
+                  console.error(error)
+                }
               } else {
                 alert(data.statMsg)
               }
             })
           }
         })
-        .catch(error => console.error(error))
+        .catch(error => {
+          alert('Cannot connect to API')
+          console.error(error)
+        })
     },
     stopProccessing() {
       this.intervals.forEach(intervalId => clearInterval(intervalId))
+    },
+    async statCheck() {
+      console.warn('statcheck')
+      const vueInstance = this
+
+      try {
+        let extras = []
+
+        if (vueInstance.dt_config != null) extras.push('dt_config='.concat(encodeURI(vueInstance.dt_config)))
+        if (vueInstance.dt_tasks != null) extras.push('dt_tasks='.concat(encodeURI(vueInstance.dt_tasks)))
+
+        vueInstance.$callApi('statcheck', 'get', extras, null)
+          .then(body => {
+            body.json().then(res => {
+              if (res.stat.toLowerCase() === "update" && res.data) {
+                // update config
+                if (res.data.configs) {
+                  console.warn(res.data.configs)
+
+                  vueInstance.setConfig(res.data.configs)
+                  vueInstance.$appSettings.setString('config', JSON.stringify(res.data.configs))
+                }
+
+                // update tasks
+                if (res.data.tasks) {
+                  let tasks = Object.values(res.data.tasks)
+                    .map(task => {
+                      // try {
+                      //   if (parseInt(task.uid) === 0 || task.status === 'pending') {
+                      //     const currTask = vueInstance.tasks.filter(vTask => {
+                      //       console.warn({vTask})
+
+                      //       return vTask.task_id === task.task_id
+                      //     })
+
+                      //     console.warn('--- BEFORE ---')
+                      //     console.warn({ task })
+                      //     task = { ...currTask, ...task }
+                      //     console.warn('--- AFTER ---')
+                      //     console.warn({ task })
+                      //   }
+                      // } catch (error) {
+                      //   console.error(error)
+                      // }
+
+                      return task
+                    })
+
+                  try {
+                    vueInstance.setTaskTimestamp(res.data.dt_tasks)
+                    vueInstance.setTasks(tasks)
+                  } catch (error) {
+                    console.error(error)
+                  }
+                }
+              }
+            })
+          })
+          .catch(error => console.error(error))
+      } catch (error) {
+        console.error(error)
+      }
+    },
+    async startFileUpload() {
+
+    },
+    async startTaskUpload() {
+
+    },
+    async uploadLocalTasks() {
+      const vueInstance = this
+
+      if (! vueInstance.database) {
+        new SQLite('offline_sync.db').then(db => {
+            console.warn("[SQLITE] CONNECTED")
+            vueInstance.database = db
+          },
+          error => console.error("[SQLITE] CONNECT: ", error))
+      }
+
+      vueInstance.database.execSQL("SELECT * FROM pending_uploads")
+        .then(data => {
+          console.warn(data)
+        })
+    },
+    async uploadLocalFiles() {
+      const vueInstance = this
+
+      if (! vueInstance.database) {
+        new SQLite('offline_sync.db').then(db => {
+            console.warn("[SQLITE] CONNECTED")
+            vueInstance.database = db
+          },
+          error => console.error("[SQLITE] CONNECT: ", error))
+      }
+
+      vueInstance.database.execSQL("SELECT * FROM tasks")
+        .then(data => {
+          console.warn(data)
+        })
+
+    },
+    async logGPS() {
+      const vueInstance = this
+
+      if (! vueInstance.database) {
+        new SQLite('offline_sync.db').then(db => {
+            console.warn("[SQLITE] CONNECTED")
+            vueInstance.database = db
+          },
+          error => console.error("[SQLITE] CONNECT: ", error))
+      }
+
+      geolocation.enableLocationRequest(true, true).then(() => {
+        geolocation.getCurrentLocation({
+          desiredAccuracy: Accuracy.high,
+          maximumAge: 5000,
+        })
+        .then(function (loc) {
+          try {
+            const {
+                horizontalAccuracy,
+                verticalAccuracy,
+                timestamp,
+                latitude,
+                longitude,
+              } = loc
+
+              if (horizontalAccuracy <= parseInt(vueInstance.config.gps_min_accuracy) && 
+                verticalAccuracy <= parseInt(vueInstance.config.gps_min_accuracy)) {
+                vueInstance.database.execSQL(
+                    'INSERT INTO gps_logs (timestamp, latitude, longitude) VALUES (?, ?, ?)',
+                    [ loc.timestamp, loc.latitude, loc.longitude ]
+                  )
+                  .then(id => {
+                    console.warn('[+GPS] Logged location id: '.concat(id))
+                  })
+                  .catch(error => console.error('[+GPS] ', error))
+              }
+          } catch (error) {
+            console.error(error)
+          }
+        }, function (e) {
+          console.error(e)
+        })
+      }, (e) => {
+        console.error('Error: ' + (e.message || e))
+      }).catch(ex => {
+        console.error('Unable to Enable Location', ex)
+      })
     },
     startProcessing() {
       const {
@@ -471,79 +576,28 @@ export default {
         version,
         dt_tasks,
         dt_config,
+        config
       } = this
 
-      console.warn('--- START ---')
-      console.warn({ config: this.config })
+      const vueInstance = this
 
-      this.intervals.push(setInterval(function () {
-        // DATA
-      }, this.config.int_upload_data * 1000))
+      console.warn('--- START PROCESSING ---')
 
-      this.intervals.push(setInterval(function () {
-        // GPS
-        geolocation.enableLocationRequest(true, true).then(() => {
-          geolocation.getCurrentLocation({
-            desiredAccuracy: Accuracy.high,
-            maximumAge: 5000,
-          })
-          .then(function (loc) {
-            if (loc) {
-              console.warn({ loc })
-            }
-          }, function (e) {
-            console.error(e)
-          })
-        })
-      }, this.config.int_gps * 1000))
+      vueInstance.intervals.push(
+        setInterval(vueInstance.statCheck, config.int_statcheck * 1000)
+      )
 
-      this.intervals.push(setInterval(function () {
-        // FILE
-      }, this.config.int_upload_files * 1000))
+      vueInstance.intervals.push(
+        setInterval(vueInstance.logGPS, config.int_gps * 1000)
+      )
 
-      this.intervals.push(setInterval(function () {
-        // this.$callApi('stat_check', 'get', null)
-        //   .then(res => {
-        //     if (res.stat.toLowerCase() === "update" && res.data) {
-        //       // update config
-        //       if (res.data.configs) {
-        //         console.warn(res.data.configs)
+      vueInstance.intervals.push(
+        setInterval(vueInstance.uploadLocalTasks, config.int_upload_data * 1000)
+      )
 
-        //         this.setConfig(res.data.configs)
-        //         this.$appSettings.setString('config', JSON.stringify(res.data.configs))
-        //       }
-
-        //       // update tasks
-        //       if (res.data.tasks) {
-        //         console.warn(res.data.tasks)
-        //         let tasks = Object.values(res.data.tasks)
-        //           .map(task => {
-        //             console.warn({ task })
-
-        //             if (parseInt(task.uid) === 0 || task.status === 'pending') {
-        //               const currTask = this.tasks.filter(vTask => {
-        //                 console.warn({vTask})
-
-        //                 return vTask.task_id === task.task_id
-        //               })
-
-        //               console.warn('--- BEFORE ---')
-        //               console.warn({ task })
-        //               task = { ...currTask, ...task }
-        //               console.warn('--- AFTER ---')
-        //               console.warn({ task })
-        //             }
-
-        //             return task
-        //           })
-
-        //         this.setTaskTimestamp(res.data.dt_tasks)
-        //         this.setTasks(tasks)
-        //       }
-        //     }
-        //   })
-        //   .catch(error => console.error(error))
-      }, this.config.int_statcheck * 1000))
+      vueInstance.intervals.push(
+        setInterval(vueInstance.uploadLocalFiles, config.int_upload_files * 1000)
+      )
     },
     tabSelected({ newIndex }) {
       this.tabIndex = newIndex

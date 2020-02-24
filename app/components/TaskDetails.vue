@@ -110,7 +110,7 @@
                   color="white"
                   backgroundColor="#f9a825"
                   variant="flat"
-                padding="16 32"
+                  padding="16 32"
                   borderRadius="48"
                   class="tx-bold"
                   flexShrink="1"
