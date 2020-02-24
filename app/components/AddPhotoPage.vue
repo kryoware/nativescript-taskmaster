@@ -90,8 +90,6 @@ export default {
       images.forEach(e => {
         let image
         
-        try {
-
         if (this.$platform.isAndroid) {
           image = e.android
         } else if (this.$platform.isIOS) {
@@ -100,14 +98,14 @@ export default {
 
         const format = image.substr(image.indexOf('.') + 1)
         const quality = 80
-        } catch (error) {
-          console.error('Compress Image - 1')
-          console.error(error)
-        }
 
         ImageSource.fromAsset(e)
         .then(imageSource => {
           try {
+            console.warn({
+              format,
+              quality
+            })
             const fileName = Array(32).fill(0).map(x => Math.random().toString(36).charAt(2)).join('').concat('.', format)
             const folder = knownFolders.documents().path
             const filePath = path.join(folder, fileName)

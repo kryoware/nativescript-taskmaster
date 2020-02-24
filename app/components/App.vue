@@ -108,13 +108,14 @@
           </StackLayout>
         </ScrollView>
       </StackLayout>
+
       <GridLayout v-else rows="*, auto">
         <StackLayout row="0">
           <StackLayout v-if="tabIndex === 0">
             <StackLayout>
               <FlexboxLayout class="paper-bt" backgroundColor="white" justifyContent="space-between" paddingLeft="16" paddingRight="16" height="64">
                 <FlexboxLayout flexDirection="column" justifyContent="center" height="48">
-                  <Label text="Task List" fontSize="24" class="tx-bold" color="#2e7d32" />
+                  <Label @tap="onTest" text="Task List" fontSize="24" class="tx-bold" color="#2e7d32" />
                 </FlexboxLayout>
                 <FlexboxLayout flexDirection="column" justifyContent="center" height="48">
                   <MDButton
@@ -189,6 +190,7 @@ import { Accuracy } from 'tns-core-modules/ui/enums'
 import { Sentry, Level } from 'nativescript-sentry'
 import { WifiInfo } from 'nativescript-wifi-info'
 
+import AddPhotoPage from './AddPhotoPage'
 import TaskDetails from './TaskDetails'
 import AddTaskPage from './AddTaskPage'
 import StatusPage from './StatusPage'
@@ -397,6 +399,9 @@ export default {
       'setConfig',
       'setTaskTimestamp',
     ]),
+    onTest() {
+      this.$navigateTo(AddPhotoPage)
+    },
     saveConfig() {
       const { apiUrl, accountCode, deviceCode, apiKey, version, } = this
 
