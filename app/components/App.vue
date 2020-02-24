@@ -8,7 +8,13 @@
           </FlexboxLayout>
         </FlexboxLayout>
 
-        <ScrollView height="100%">
+        <FlexboxLayout v-if="task" width="100%" height="100%" justifyContent="center" flexDirection="column">
+          <FlexboxLayout width="100%" height="100%" justifyContent="center">
+            <ActivityIndicator busy="true" />
+          </FlexboxLayout>
+        </FlexboxLayout>
+
+        <ScrollView v-else height="100%">
           <StackLayout paddingLeft="16" paddingRight="16" paddingTop="16">
             <MDTextField
               :text="apiUrl"
@@ -230,7 +236,13 @@ export default {
       fileIntervalId: null,
       dataIntervalId: null,
 
-      homeNetwork: 'AndroidWifi',
+      networkWhitelist: [
+        'AndroidWifi',
+        'AN5506-04-FA_99ac8'
+      ],
+
+      lastGpsLogId: null,
+      gpsLogIntervalId: null,
 
       tabIndex: 0,
       connection: null,
@@ -251,95 +263,22 @@ export default {
     }
 
     stopMonitoring()
+    clearInterval(this.gpsLogIntervalId)
   },
   mounted() {
+    console.warn({ tasks: this.tasks })
     this.isFirstRun = !this.$appSettings.hasKey('first_run') || this.$appSettings.getBoolean('first_run')
 
     if (this.$appSettings.hasKey('config')) {
-      try {
-        const config = JSON.parse(this.$appSettings.getString('config'))
+      const config = JSON.parse(this.$appSettings.getString('config'))
 
-        this.setConfig(config)
+      console.warn({ config })
 
-        // Monitor Connection -- if it switches to wifi or loses connection
-        // startMonitoring((conn) => {
-        //   if (conn === connectionType.wifi) {
-        //     console.warn('Connected to WIFI')
-        //     console.warn('---')
-        //     console.warn('Check SSID')
-        //     console.warn('---')
-
-        //     const ssid = DeviceInfo.wifiSSID()
-
-        //     this.connection = {
-        //       type: 'WIFI',
-        //       ssid,
-        //     }
-
-        //     if (ssid === homeNetwork) {
-        //       this.isConnected = true
-
-              if (this.$appSettings.hasKey('url')) {
-                this.startProcessing()
-              }
-        //     } else {
-        //       // Connected to wifi but not whitelisted
-        //       this.isConnected = false
-        //     }
-        //   } else {
-        //     console.warn('Stop Uploading')
-        //     this.isConnected = false
-        //   }
-        // })
-
-        const vueInstance = this
-
-        console.warn("[SQLITE] Initialize")
-        new SQLite('offline_sync.db').then(db => {
-          console.warn("[SQLITE] CONNECTED")
-          vueInstance.database = db
-
-          db.execSQL("CREATE TABLE IF NOT EXISTS gps_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp VARCHAR(500), latitude VARCHAR(500), longitude VARCHAR(500))")
-          .then(result => {
-            console.warn("[SQLITE] CREATE GPS LOGS TABLE: ", result)
-          },
-          error => console.error("[SQLITE] CREATE GPS LOGS TABLE: ", error))
-
-          db.execSQL("CREATE TABLE IF NOT EXISTS pending_uploads (id INTEGER PRIMARY KEY AUTOINCREMENT, filename VARCHAR(500))")
-          .then(result => {
-            console.warn("[SQLITE] CREATE UPLOADS TABLE: ", result)
-          },
-          error => console.error("[SQLITE] CREATE UPLOADS TABLE: ", error))
-
-          db.execSQL("CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title VARCHAR(500), customer VARCHAR(500), address VARCHAR(500), notes VARCHAR(500), instructions VARCHAR(500), date VARCHAR(500))")
-          .then(result => {
-            console.warn("[SQLITE] CREATE TASKS TABLE: ", result)
-
-          },
-          error => console.error("[SQLITE] CREATE TASKS TABLE: ", error))
-        },
-        error => console.error("[SQLITE] CONNECT: ", error))
-      } catch (error) {
-        console.error(error)
-      }
+      this.setConfig(config)
+      this.initObserver()
+      this.initSQL()
+      this.initGpsLogging()
     }
-
-    // permissions
-    //   .requestPermissions([
-    //     android.Manifest.permission.ACCESS_FINE_LOCATION,
-    //     android.Manifest.permission.ACCESS_COARSE_LOCATION
-    //   ])
-    //   .then(() => this.allowExecution = true)
-    //   .catch(() => this.allowExecution = false)
-
-    // camera.requestPermissions().then({
-    //   success: () => {
-
-    //   },
-    //   failure: () => {
-
-    //   }
-    // })
   },
   methods: {
     ...mapActions([
@@ -347,6 +286,95 @@ export default {
       'setConfig',
       'setTaskTimestamp',
     ]),
+    attemptGpsLogUpload() {
+      const vueInstance = this
+
+      if (! vueInstance.database) {
+        new SQLite('offline_sync.db').then(db => {
+            console.warn("[SQLITE] CONNECTED")
+            vueInstance.database = db
+          },
+          error => console.error("[SQLITE] CONNECT: ", error))
+      }
+
+      const query = "SELECT * FROM tasks LIMIT ".concat()
+
+      vueInstance.database.execSQL(query)
+        .then(data => {
+          console.warn(data)
+        })
+    },
+    initGpsLogging() {
+      const vueInstance = this
+
+      vueInstance.gpsLogIntervalId = setInterval(vueInstance.logGPS, config.int_gps * 1000)
+    },
+    initObserver() {
+      // Monitor Connection -- if it switches to wifi or loses connection
+      console.warn('--- START CONNECTION MONITORING ---')
+      startMonitoring((conn) => {
+        if (conn === connectionType.wifi) {
+          let ssid = (DeviceInfo.wifiSSID())
+          ssid = ssid.substr(1, ssid.length - 2)
+
+          this.connection = {
+            type: 'WIFI',
+            ssid,
+          }
+
+          console.warn({ ssid })
+
+          if (this.networkWhitelist.includes(ssid)) {
+            console.warn('SSID IN WHITELIST')
+            this.isConnected = true
+
+            if (this.$appSettings.hasKey('url')) {
+              this.startProcessing()
+              this.attemptGpsLogUpload()
+            } else {
+              console.warn('INVALID API URL')
+            }
+          } else {
+            console.warn('SSID NOT IN WHITELIST')
+            this.isConnected = false
+          }
+        } else {
+          console.warn('NOT CONNECTED TO WIFI')
+          this.isConnected = false
+
+          this.stopProccessing()
+        }
+      })
+    },
+    initSQL() {
+      const vueInstance = this
+
+      console.warn("[SQLITE] Initialize")
+      new SQLite('offline_sync.db').then(db => {
+        console.warn("[SQLITE] CONNECTED")
+        vueInstance.database = db
+
+        db.execSQL("CREATE TABLE IF NOT EXISTS gps_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp VARCHAR(500), latitude VARCHAR(500), longitude VARCHAR(500))")
+        .then(result => {
+          console.warn("[SQLITE] CREATE GPS LOGS TABLE: ", result)
+        },
+        error => console.error("[SQLITE] CREATE GPS LOGS TABLE: ", error))
+
+        db.execSQL("CREATE TABLE IF NOT EXISTS pending_uploads (id INTEGER PRIMARY KEY AUTOINCREMENT, filename VARCHAR(500))")
+        .then(result => {
+          console.warn("[SQLITE] CREATE UPLOADS TABLE: ", result)
+        },
+        error => console.error("[SQLITE] CREATE UPLOADS TABLE: ", error))
+
+        db.execSQL("CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title VARCHAR(500), customer VARCHAR(500), address VARCHAR(500), notes VARCHAR(500), instructions VARCHAR(500), date VARCHAR(500))")
+        .then(result => {
+          console.warn("[SQLITE] CREATE TASKS TABLE: ", result)
+
+        },
+        error => console.error("[SQLITE] CREATE TASKS TABLE: ", error))
+      },
+      error => console.error("[SQLITE] CONNECT: ", error))
+    },
     onTest() {
       this.$navigateTo(AddPhotoPage)
     },
@@ -420,6 +448,8 @@ export default {
         })
     },
     stopProccessing() {
+      console.warn('--- STOP PROCESSING ---')
+
       this.intervals.forEach(intervalId => clearInterval(intervalId))
     },
     async statCheck() {
@@ -590,10 +620,6 @@ export default {
 
       vueInstance.intervals.push(
         setInterval(vueInstance.statCheck, config.int_statcheck * 1000)
-      )
-
-      vueInstance.intervals.push(
-        setInterval(vueInstance.logGPS, config.int_gps * 1000)
       )
 
       vueInstance.intervals.push(
