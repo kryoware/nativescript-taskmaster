@@ -1,5 +1,5 @@
 <template>
-  <StackLayout height="118" class="paper-tp">
+  <StackLayout height="104" class="paper-tp">
     <ListView for="item in items" @itemTap="onItemTap" height="100%" separatorColor="transparent">
       <v-template>
         <StackLayout style="padding: 16 24">
