@@ -6,7 +6,7 @@
     </ActionBar>
 
     <DockLayout stretchLastChild="true">
-      <FlexboxLayout dock="bottom" justifyContent="space-between" width="100%" padding="24" >
+      <FlexboxLayout dock="bottom" justifyContent="space-between" width="100%" padding="24">
         <MDButton
           text="Add Photo"
           color="#2e7d32"
@@ -89,43 +89,55 @@ export default {
     compressImage(images) {
       images.forEach(e => {
         let image
-        
+
+        console.warn(e)
+
         if (this.$platform.isAndroid) {
           image = e.android
         } else if (this.$platform.isIOS) {
 
         }
+        console.warn(image)
 
         const format = image.substr(image.indexOf('.') + 1)
         const quality = 80
 
-        ImageSource.fromAsset(e)
-        .then(imageSource => {
-          try {
-            console.warn({
-              format,
-              quality
-            })
-            const fileName = Array(32).fill(0).map(x => Math.random().toString(36).charAt(2)).join('').concat('.', format)
-            const folder = knownFolders.documents().path
-            const filePath = path.join(folder, fileName)
-            const saved = imageSource.saveToFile(filePath, format, quality)
+        console.warn(format)
 
-            if (saved) {
-              console.warn({ fileName })
-              console.warn({ filePath })
+        try {
+          ImageSource.fromAsset(e)
+          .then(imageSource => {
+            console.warn(imageSource)
+            try {
+              console.warn({
+                format,
+                quality
+              })
+              const fileName = Array(32).fill(0).map(x => Math.random().toString(36).charAt(2)).join('').concat('.', format)
+              const folder = knownFolders.documents().path
+              const filePath = path.join(folder, fileName)
+              const saved = imageSource.saveToFile(filePath, format, quality)
 
-              this.images.push(filePath)
+              if (saved) {
+                console.warn({ fileName })
+                console.warn({ filePath })
+
+                this.images.push(filePath)
+              }
+            } catch (error) {
+              console.error('Compress Image')
+              console.error(error)
             }
-          } catch (error) {
-            console.error('Compress Image')
+          })
+          .catch(error => {
+            // Sentry.captureException(error)
+            console.error('ImageSource')
             console.error(error)
-          }
-        })
-        .catch(error => {
-          Sentry.captureException(error)
+          })
+        } catch (error) {
+          console.error('ImageSource')
           console.error(error)
-        })
+        }
       })
     },
     takePictureHandler(e) {
@@ -142,8 +154,8 @@ export default {
           .then(
             function success() {
               var options = {
-                width: 500 / scale,
-                height: 500 / scale,
+                width: 800 / scale,
+                height: 800 / scale,
                 keepAspectRatio: true,
                 saveToGallery: true
               }
@@ -151,7 +163,9 @@ export default {
               camera.takePicture(options)
                 .then(takePictureHandler)
                 .catch(function (err) {
-                  Sentry.captureException(err)
+                  // Sentry.captureException(err)
+                  console.error('takePicture')
+                  console.error(err)
                   console.error(err.message)
                 })
             },
@@ -167,7 +181,9 @@ export default {
             .authorize()
             .then(() => picker.present())
             .then(selection => this.compressImage(selection))
-            .catch(e => console.error(e))
+            .catch(e => {
+              console.error(e)
+            })
           break
       }
     }
