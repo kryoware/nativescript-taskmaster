@@ -11,10 +11,16 @@
           <!-- Task Details -->
           <StackLayout padding="16 32 24 32">
             <MDTextField
+              ref="task_title"
               floating="false"
               hint="Task"
               :text="task.task_title"
-              @textChange="({ value }) => { this.title = value }"
+
+              :error="errors.task_title"
+              errorEnabled="true"
+
+              @focus="() => { this.errors.task_title = null }"
+              @textChange="({ value }) => { this.task.task_title = value }"
               strokeColor="#2e7d32"
 
               placeholderColor="#2e7d32"
@@ -29,9 +35,15 @@
             />
 
             <MDTextField
+              ref="customer"
               floating="false"
               :text="task.customer"
-              @textChange="({ value }) => { this.customer = value }"
+
+              :error="errors.customer"
+              errorEnabled="true"
+
+              @focus="() => { this.errors.customer = null }"
+              @textChange="({ value }) => { this.task.customer = value }"
               hint="Customer"
               strokeColor="#2e7d32"
               paddingTop="0"
@@ -47,7 +59,7 @@
           </StackLayout>
           <!-- Task Details -->
 
-          <StackLayout backgroundColor="white" borderRadius="32" padding="16" marginLeft="8" marginRight="8">
+          <StackLayout backgroundColor="white" borderRadius="32" padding="16" marginBottom="8" marginLeft="8" marginRight="8">
             <MDTextField
               hint="Instructions"
               @loaded="initMultiline"
@@ -125,7 +137,7 @@
                 v-else
                 text="Save"
                 color="white"
-                backgroundColor="#03A9F4"
+                backgroundColor="#2e7d32"
                 variant="flat"
                 padding="16 32"
                 borderRadius="48"
@@ -161,7 +173,7 @@
             </StackLayout>
           </StackLayout>
 
-          <FlexboxLayout margin="16 8 16 8" flexGrow="1" justifyContent="space-between">
+          <FlexboxLayout v-if="isSaved" margin="0 8 16 8" flexGrow="1" justifyContent="space-between">
             <MDButton
               v-if="!isCheckedIn"
               text="View Map"
@@ -226,6 +238,10 @@ export default {
         instructions: null,
         task_title: null,
         customer: null
+      },
+      errors: {
+        task_title: null,
+        customer: null
       }
     }
   },
@@ -234,9 +250,17 @@ export default {
       'addTask'
     ]),
     onSaveTap() {
-      console.warn('save tap')
+      if (this.task.task_title == null || this.task.task_title == '') {
+        this.errors.task_title = 'Task is required'
+      }
+
+      if (this.task.customer == null || this.task.customer == '') {
+        this.errors.customer = 'Customer is required'
+      }
+
       // add to vuex
       // insert into sqlite
+      console.warn(this.task)
     },
     initMultiline(args) {
       try {
