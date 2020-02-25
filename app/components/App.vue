@@ -8,13 +8,13 @@
           </FlexboxLayout>
         </FlexboxLayout>
 
-        <FlexboxLayout v-if="task" width="100%" height="100%" justifyContent="center" flexDirection="column">
+        <!-- <FlexboxLayout v-if="tasks" width="100%" height="100%" justifyContent="center" flexDirection="column">
           <FlexboxLayout width="100%" height="100%" justifyContent="center">
             <ActivityIndicator busy="true" />
           </FlexboxLayout>
-        </FlexboxLayout>
+        </FlexboxLayout> -->
 
-        <ScrollView v-else height="100%">
+        <ScrollView height="100%">
           <StackLayout paddingLeft="16" paddingRight="16" paddingTop="16">
             <MDTextField
               :text="apiUrl"
@@ -269,15 +269,22 @@ export default {
     console.warn({ tasks: this.tasks })
     this.isFirstRun = !this.$appSettings.hasKey('first_run') || this.$appSettings.getBoolean('first_run')
 
-    if (this.$appSettings.hasKey('config')) {
-      const config = JSON.parse(this.$appSettings.getString('config'))
+    try {
+      console.warn(this.$appSettings.getString('config'))
 
-      console.warn({ config })
+      if (this.$appSettings.hasKey('config')) {
+        const config = JSON.parse(this.$appSettings.getString('config'))
 
-      this.setConfig(config)
-      this.initObserver()
-      this.initSQL()
-      this.initGpsLogging()
+        console.warn(config)
+
+        this.setConfig(config)
+        this.initObserver()
+        this.initSQL()
+        this.initGpsLogging()
+      }
+    } catch (error) {
+      console.error('mounted')
+      console.error(error)
     }
   },
   methods: {
@@ -286,6 +293,72 @@ export default {
       'setConfig',
       'setTaskTimestamp',
     ]),
+    saveTasks(tasks) {
+      console.warn('saveTasks')
+      const vueInstance = this
+
+      if (! vueInstance.database) {
+        new SQLite('offline_sync.db').then(db => {
+            console.warn("[SQLITE] CONNECTED")
+            vueInstance.database = db
+          },
+          error => console.error("[SQLITE] CONNECT: ", error))
+      }
+
+      tasks.forEach(task => {
+        console.warn('[SQLITE] ADD TASK')
+
+        console.warn([
+          'schedule: ' + task.schedule,
+          'task_start: ' + task.task_start,
+          'task_end: ' + task.task_end,
+          'task_status: ' + task.task_status,
+          'task_time_allocated: ' + task.task_time_allocated,
+          'assigned_to: ' + task.assigned_to,
+          'customer: ' + task.customer,
+          'task_id: ' + task.task_id,
+          'uid: ' + task.uid,
+          'task_tag: ' + task.task_tag,
+          'task_title: ' + task.task_title,
+          'task_des: ' + task.task_des,
+          'instructions: ' + task.instructions,
+          'notes: ' + task.notes,
+          'location: ' + task.location,
+          'gps_coords: ' + task.gps_coords,
+          'sched_day: ' + task.sched_day,
+          'sched_time: ' + task.sched_time
+        ])
+
+        const values = [
+          task.schedule,
+          task.task_start,
+          task.task_end,
+          task.task_status,
+          task.task_time_allocated,
+          task.assigned_to,
+          task.customer,
+          task.task_id,
+          task.uid,
+          task.task_tag,
+          task.task_title,
+          task.task_des,
+          task.instructions,
+          task.notes,
+          task.location,
+          task.gps_coords,
+          task.sched_day,
+          task.sched_time
+        ]
+
+        const query = `INSERT INTO tasks ( schedule, task_start, task_end, task_status, task_time_allocated, assigned_to, customer, task_id, uid, task_tag, task_title, task_des, instructions, notes, location, gps_coords, sched_day, sched_time ) VALUES( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      
+        vueInstance.database.execSQL(query, values)
+          .then(id => {
+            console.warn('[+TASK] Local task id: '.concat(id))
+          })
+          .catch(error => console.error('[+TASK] ', error))
+      })
+    },
     attemptGpsLogUpload() {
       const vueInstance = this
 
@@ -314,7 +387,7 @@ export default {
       console.warn('--- START CONNECTION MONITORING ---')
       startMonitoring((conn) => {
         if (conn === connectionType.wifi) {
-          let ssid = (DeviceInfo.wifiSSID())
+          let ssid = DeviceInfo.wifiSSID()
           ssid = ssid.substr(1, ssid.length - 2)
 
           this.connection = {
@@ -355,25 +428,40 @@ export default {
         vueInstance.database = db
 
         db.execSQL("CREATE TABLE IF NOT EXISTS gps_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp VARCHAR(500), latitude VARCHAR(500), longitude VARCHAR(500))")
-        .then(result => {
-          console.warn("[SQLITE] CREATE GPS LOGS TABLE: ", result)
-        },
-        error => console.error("[SQLITE] CREATE GPS LOGS TABLE: ", error))
+          .then(result => {
+            console.warn("[SQLITE] CREATE GPS LOGS TABLE: ", result)
+          },
+          error => {
+            console.error("[SQLITE] CREATE GPS LOGS TABLE: ", error)
+          })
 
         db.execSQL("CREATE TABLE IF NOT EXISTS pending_uploads (id INTEGER PRIMARY KEY AUTOINCREMENT, filename VARCHAR(500))")
-        .then(result => {
-          console.warn("[SQLITE] CREATE UPLOADS TABLE: ", result)
-        },
-        error => console.error("[SQLITE] CREATE UPLOADS TABLE: ", error))
+          .then(result => {
+            console.warn("[SQLITE] CREATE UPLOADS TABLE: ", result)
+          },
+          error => {
+            console.error("[SQLITE] CREATE UPLOADS TABLE: ", error)
+          })
 
-        db.execSQL("CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, title VARCHAR(500), customer VARCHAR(500), address VARCHAR(500), notes VARCHAR(500), instructions VARCHAR(500), date VARCHAR(500))")
-        .then(result => {
-          console.warn("[SQLITE] CREATE TASKS TABLE: ", result)
+        db.execSQL("CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY AUTOINCREMENT, schedule DATETIME, task_start DATETIME, task_end DATETIME, task_status VARCHAR(50), task_time_allocated VARCHAR(20), assigned_to VARCHAR(20), customer VARCHAR(20), task_id VARCHAR(10), uid VARCHAR(10), task_tag VARCHAR(200), task_title VARCHAR(200), task_des VARCHAR(500), instructions VARCHAR(500), notes VARCHAR(500), location VARCHAR(200), gps_coords VARCHAR(200), sched_day VARCHAR(20), sched_time VARCHAR(20))")
+          .then(result => {
+            console.warn("[SQLITE] CREATE TASKS TABLE: ", result)
+          },
+          error => {
+            console.error("[SQLITE] CREATE TASKS TABLE: ", error)
+          })
 
-        },
-        error => console.error("[SQLITE] CREATE TASKS TABLE: ", error))
+        db.execSQL("CREATE [UNIQUE] INDEX unique_task_id ON tasks(task_id)")
+          .then(result => {
+            console.warn("[SQLITE] CREATE UNIQUE TASKS INDEX: ", result)
+          },
+          error => {
+            console.error("[SQLITE] CREATE UNIQUE TASKS INDEX: ", error)
+          })
       },
-      error => console.error("[SQLITE] CONNECT: ", error))
+      error => {
+        console.error("[SQLITE] CONNECT: ", error)
+      })
     },
     onTest() {
       this.$navigateTo(AddPhotoPage)
@@ -430,10 +518,29 @@ export default {
                   this.$appSettings.setString('url', apiUrl)
                   this.$appSettings.setString('ak', apiKey)
 
+                  if (data.data.hasOwnProperty('tasks')) {
+                    const tasks = Object.values(data.data.tasks)
+
+                    console.warn({ tasks })
+
+                    this.setTasks(tasks)
+                    this.saveTasks(tasks)
+                  }
+
+                  if (data.data.hasOwnProperty('profile')) {
+                    const user = Object.values(data.data.profile)
+
+                    console.warn({ user })
+
+                    this.setUser(user)
+                    this.$appSettings.setString('user', JSON.stringify(user))
+                  }
+
                   this.setConfig(data.data.configs)
                   this.isFirstRun = false
                   this.startProcessing()
                 } catch (error) {
+                  console.error('[API] INI')
                   console.error(error)
                 }
               } else {
@@ -521,6 +628,7 @@ export default {
 
     },
     async uploadLocalTasks() {
+      console.warn('uploadLocalTasks')
       const vueInstance = this
 
       if (! vueInstance.database) {

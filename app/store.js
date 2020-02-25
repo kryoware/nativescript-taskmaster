@@ -8,7 +8,8 @@ export default new Vuex.Store({
     isConnected: false,
     tasks: [],
     config: {},
-    dt_tasks: null
+    dt_tasks: null,
+    user: {},
   },
   mutations: {
     addTask: (state, task) => {
@@ -25,6 +26,9 @@ export default new Vuex.Store({
     },
     setTaskTimestamp: (state, dt_tasks) => {
       state.dt_tasks = dt_tasks
+    },
+    setUser: (state, user) => {
+      state.user = user
     }
   },
   actions: {
@@ -42,6 +46,9 @@ export default new Vuex.Store({
     },
     setTaskTimestamp: ({ commit }, dt_tasks) => {
       commit("setTaskTimestamp", dt_tasks)
+    },
+    setUser: ({ commit }, user) => {
+      commit("setUser", user)
     }
   }
 });
