@@ -177,35 +177,39 @@
 </template>
 
 <script>
+import * as fileSystemModule from 'tns-core-modules/file-system/file-system'
 import * as permissions from 'nativescript-permissions'
 import * as camera from 'nativescript-camera'
 import * as platform from 'platform'
 import { android as androidApp } from 'tns-core-modules/application'
 import {
   connectionType,
-  getConnectionType,
   startMonitoring,
   stopMonitoring
 } from 'tns-core-modules/connectivity'
 
 import { mapState, mapActions } from 'vuex'
+import moment from 'moment'
 
 import * as geolocation from 'nativescript-geolocation'
 import { Accuracy } from 'tns-core-modules/ui/enums'
 
 import { Sentry, Level } from 'nativescript-sentry'
+
 import { WifiInfo } from 'nativescript-wifi-info'
+import { DeviceInfo } from 'nativescript-dna-deviceinfo'
 
 import AddPhotoPage from './AddPhotoPage'
 import TaskDetails from './TaskDetails'
 import AddTaskPage from './AddTaskPage'
 import StatusPage from './StatusPage'
 import TaskCard from './TaskCard'
-import { DeviceInfo } from 'nativescript-dna-deviceinfo'
-
-import { getJSON, request, HttpResponse } from 'tns-core-modules/http'
 
 const SQLite = require('nativescript-sqlite')
+const db = new SQLite('offline_sync.db')
+const http = require('nativescript-background-http')
+const fileUploadSession = http.session('file-upload')
+const dataUploadSession = http.session('data-upload')
 
 export default {
   components: {
@@ -251,6 +255,7 @@ export default {
   },
   computed: {
     ...mapState({
+      user: state => state.user,
       tasks: state => state.tasks,
       config: state => state.config,
       dt_tasks: state => state.dt_tasks,
@@ -266,21 +271,59 @@ export default {
     clearInterval(this.gpsLogIntervalId)
   },
   mounted() {
-    console.warn({ tasks: this.tasks })
+    geolocation.enableLocationRequest(true, true).then(() => {
+    }, (e) => {
+      console.error('Error: ' + (e.message || e))
+    }).catch(ex => {
+      console.error('Unable to Enable Location', ex)
+    })
+
+    const vueInstance = this
     this.isFirstRun = !this.$appSettings.hasKey('first_run') || this.$appSettings.getBoolean('first_run')
 
     try {
-      console.warn(this.$appSettings.getString('config'))
+      console.warn('APPSET: ', this.$appSettings.getString('config'))
 
       if (this.$appSettings.hasKey('config')) {
         const config = JSON.parse(this.$appSettings.getString('config'))
 
         console.warn(config)
 
-        this.setConfig(config)
-        this.initObserver()
         this.initSQL()
-        this.initGpsLogging()
+        this.initObserver()
+        this.setConfig(config)
+        
+        geolocation.enableLocationRequest(true, true).then(() => {
+          this.initGpsLogging()
+        }, (e) => {
+          console.error('Error: ' + (e.message || e))
+        }).catch(ex => {
+          console.error('Unable to Enable Location', ex)
+        })
+
+        if (! vueInstance.database) {
+          new SQLite('offline_sync.db').then(db => {
+              console.warn("[SQLITE] CONNECTED")
+              vueInstance.database = db
+
+              db.execSQL("SELECT id FROM tasks ORDER BY id DESC LIMIT 1")
+                .then(result => {
+                  console.warn('Last Id: ', result)
+                })
+                .catch(error => {
+                  console.error('[SQLITE] Last Id: ', error)
+                })
+            },
+            error => console.error("[SQLITE] CONNECT: ", error))
+        }
+      }
+
+      if (this.$appSettings.hasKey('user')) {
+        const user = JSON.parse(this.$appSettings.getString('user'))
+
+        console.warn({ user })
+
+        this.setUser(user)
       }
     } catch (error) {
       console.error('mounted')
@@ -290,10 +333,11 @@ export default {
   methods: {
     ...mapActions([
       'setTasks',
+      'setUser',
       'setConfig',
       'setTaskTimestamp',
     ]),
-    saveTasks(tasks) {
+    async saveTasks(tasks) {
       console.warn('saveTasks')
       const vueInstance = this
 
@@ -306,29 +350,6 @@ export default {
       }
 
       tasks.forEach(task => {
-        console.warn('[SQLITE] ADD TASK')
-
-        console.warn([
-          'schedule: ' + task.schedule,
-          'task_start: ' + task.task_start,
-          'task_end: ' + task.task_end,
-          'task_status: ' + task.task_status,
-          'task_time_allocated: ' + task.task_time_allocated,
-          'assigned_to: ' + task.assigned_to,
-          'customer: ' + task.customer,
-          'task_id: ' + task.task_id,
-          'uid: ' + task.uid,
-          'task_tag: ' + task.task_tag,
-          'task_title: ' + task.task_title,
-          'task_des: ' + task.task_des,
-          'instructions: ' + task.instructions,
-          'notes: ' + task.notes,
-          'location: ' + task.location,
-          'gps_coords: ' + task.gps_coords,
-          'sched_day: ' + task.sched_day,
-          'sched_time: ' + task.sched_time
-        ])
-
         const values = [
           task.schedule,
           task.task_start,
@@ -356,10 +377,31 @@ export default {
           .then(id => {
             console.warn('[+TASK] Local task id: '.concat(id))
           })
-          .catch(error => console.error('[+TASK] ', error))
+          .catch(error => {
+            console.error('[+TASK] ', error)
+
+            // Attempt to update local copy
+            vueInstance.database.execSQL("SELECT id FROM tasks WHERE task_id = ?", [ values.task_id ])
+              .then(result => {
+                console.warn('[TASK UPDATE] ', result)
+
+                // Update where id = result
+                vueInstance.database.execSQL("UPDATE tasks SET schedule = ?, task_start = ?, task_end = ?, task_status = ?, task_time_allocated = ?, assigned_to = ?, customer = ?, task_id = ?, uid = ?, task_tag = ?, task_title = ?, task_des = ?, instructions = ?, notes = ?, location = ?, gps_coords = ?, sched_day = ?, sched_time = ? WHERE task_id = ?",
+                  [ values, ...[values.task_id] ])
+                  .then(result => {
+                    console.warn('task update query result: ', result)
+                  })
+                  .catch(error => {
+                    console.error('task update query error: ', error)
+                  })
+              })
+              .error(error => {
+                console.error('[TASK UPDATE] ', error)
+              })
+          })
       })
     },
-    attemptGpsLogUpload() {
+    async attemptGpsLogUpload() {
       const vueInstance = this
 
       if (! vueInstance.database) {
@@ -370,17 +412,56 @@ export default {
           error => console.error("[SQLITE] CONNECT: ", error))
       }
 
-      const query = "SELECT * FROM tasks LIMIT ".concat()
-
-      vueInstance.database.execSQL(query)
+      vueInstance.database.all("SELECT * FROM gps_logs")
         .then(data => {
-          console.warn(data)
+          try {
+            console.warn('GET GPS LOGS: ', data)
+
+            // create file
+            const filename = `${this.user.uid}_${moment().format('Y-M-D')}.glog`
+
+            console.warn(filename)
+
+            const docs = fileSystemModule.knownFolders.documents()
+            const folder = fileSystemModule.knownFolders.documents().path
+            const filePath = fileSystemModule.path.join(folder, filename)
+            const file = fileSystemModule.File.fromPath(filePath)
+
+            data.forEach(gps_log => {
+              const timestamp = moment(gps_log[1]).format('x').toString()
+              const coords = `${gps_log[2]},${gps_log[2]}`
+
+              file.writeText(`${timestamp} | ${coords}`)
+                .then(() => {
+                })
+                .catch(err => {
+                  console.warn('file write');
+                  console.warn(err);
+                })
+            })
+
+            file.readText()
+              .then(res => {
+                console.warn('file read');
+                console.warn(res)
+              });
+
+            // upload file
+            // fileUploadSession.uploadFile(file, {
+            //   url: this.config.url
+            // })
+          } catch (error) {
+            console.warn('create gps log file: ', error)
+          }
+        })
+        .catch(error => {
+          console.error('GET GPS LOGS: ', error)
         })
     },
     initGpsLogging() {
       const vueInstance = this
 
-      vueInstance.gpsLogIntervalId = setInterval(vueInstance.logGPS, config.int_gps * 1000)
+      vueInstance.gpsLogIntervalId = setInterval(vueInstance.logGPS, vueInstance.config.int_gps * 1000)
     },
     initObserver() {
       // Monitor Connection -- if it switches to wifi or loses connection
@@ -397,7 +478,8 @@ export default {
 
           console.warn({ ssid })
 
-          if (this.networkWhitelist.includes(ssid)) {
+          // FIXME: Fix whitelist
+          if (this.networkWhitelist.includes(ssid) || true) {
             console.warn('SSID IN WHITELIST')
             this.isConnected = true
 
@@ -451,7 +533,7 @@ export default {
             console.error("[SQLITE] CREATE TASKS TABLE: ", error)
           })
 
-        db.execSQL("CREATE [UNIQUE] INDEX unique_task_id ON tasks(task_id)")
+        db.execSQL("CREATE UNIQUE INDEX unique_task_id ON tasks (task_id)")
           .then(result => {
             console.warn("[SQLITE] CREATE UNIQUE TASKS INDEX: ", result)
           },
@@ -521,14 +603,12 @@ export default {
                   if (data.data.hasOwnProperty('tasks')) {
                     const tasks = Object.values(data.data.tasks)
 
-                    console.warn({ tasks })
-
                     this.setTasks(tasks)
                     this.saveTasks(tasks)
                   }
 
-                  if (data.data.hasOwnProperty('profile')) {
-                    const user = Object.values(data.data.profile)
+                  if (data.data.hasOwnProperty('profiles')) {
+                    const user = Object.values(data.data.profiles)[0]
 
                     console.warn({ user })
 
@@ -538,6 +618,9 @@ export default {
 
                   this.setConfig(data.data.configs)
                   this.isFirstRun = false
+                  this.initSQL()
+                  this.initObserver()
+                  this.initGpsLogging()
                   this.startProcessing()
                 } catch (error) {
                   console.error('[API] INI')
@@ -560,7 +643,6 @@ export default {
       this.intervals.forEach(intervalId => clearInterval(intervalId))
     },
     async statCheck() {
-      console.warn('statcheck')
       const vueInstance = this
 
       try {
@@ -575,6 +657,7 @@ export default {
               if (res.stat.toLowerCase() === "update" && res.data) {
                 // update config
                 if (res.data.configs) {
+                  console.warn('[STAT] New Config')
                   console.warn(res.data.configs)
 
                   vueInstance.setConfig(res.data.configs)
@@ -583,6 +666,7 @@ export default {
 
                 // update tasks
                 if (res.data.tasks) {
+                  console.warn('[STAT] New Tasks')
                   let tasks = Object.values(res.data.tasks)
                     .map(task => {
                       // try {
@@ -609,6 +693,7 @@ export default {
                   try {
                     vueInstance.setTaskTimestamp(res.data.dt_tasks)
                     vueInstance.setTasks(tasks)
+                    vueInstance.saveTasks(tasks)
                   } catch (error) {
                     console.error(error)
                   }
@@ -622,43 +707,54 @@ export default {
       }
     },
     async startFileUpload() {
+      // console.warn('--- UPLOAD FILES ---')
+      // const vueInstance = this
 
+      // if (! vueInstance.database) {
+      //   new SQLite('offline_sync.db').then(db => {
+      //       console.warn("[SQLITE] CONNECTED")
+      //       vueInstance.database = db
+      //     },
+      //     error => console.error("[SQLITE] CONNECT: ", error))
+      // }
+
+      // vueInstance.database.execSQL("SELECT")
     },
     async startTaskUpload() {
 
     },
     async uploadLocalTasks() {
-      console.warn('uploadLocalTasks')
-      const vueInstance = this
+      // console.warn('uploadLocalTasks')
+      // const vueInstance = this
 
-      if (! vueInstance.database) {
-        new SQLite('offline_sync.db').then(db => {
-            console.warn("[SQLITE] CONNECTED")
-            vueInstance.database = db
-          },
-          error => console.error("[SQLITE] CONNECT: ", error))
-      }
+      // if (! vueInstance.database) {
+      //   new SQLite('offline_sync.db').then(db => {
+      //       console.warn("[SQLITE] CONNECTED")
+      //       vueInstance.database = db
+      //     },
+      //     error => console.error("[SQLITE] CONNECT: ", error))
+      // }
 
-      vueInstance.database.execSQL("SELECT * FROM pending_uploads")
-        .then(data => {
-          console.warn(data)
-        })
+      // vueInstance.database.execSQL("SELECT * FROM tasks")
+      //   .then(data => {
+      //     console.warn(data)
+      //   })
     },
     async uploadLocalFiles() {
-      const vueInstance = this
+      // const vueInstance = this
 
-      if (! vueInstance.database) {
-        new SQLite('offline_sync.db').then(db => {
-            console.warn("[SQLITE] CONNECTED")
-            vueInstance.database = db
-          },
-          error => console.error("[SQLITE] CONNECT: ", error))
-      }
+      // if (! vueInstance.database) {
+      //   new SQLite('offline_sync.db').then(db => {
+      //       console.warn("[SQLITE] CONNECTED")
+      //       vueInstance.database = db
+      //     },
+      //     error => console.error("[SQLITE] CONNECT: ", error))
+      // }
 
-      vueInstance.database.execSQL("SELECT * FROM tasks")
-        .then(data => {
-          console.warn(data)
-        })
+      // vueInstance.database.execSQL("SELECT * FROM tasks")
+      //   .then(data => {
+      //     console.warn(data)
+      //   })
 
     },
     async logGPS() {
@@ -711,32 +807,21 @@ export default {
       })
     },
     startProcessing() {
-      const {
-        apiUrl,
-        accountCode,
-        deviceCode,
-        apiKey,
-        version,
-        dt_tasks,
-        dt_config,
-        config
-      } = this
-
       const vueInstance = this
 
       console.warn('--- START PROCESSING ---')
 
-      vueInstance.intervals.push(
-        setInterval(vueInstance.statCheck, config.int_statcheck * 1000)
-      )
+      // vueInstance.intervals.push(
+      //   setInterval(vueInstance.statCheck, vueInstance.config.int_statcheck * 10000)
+      // )
 
-      vueInstance.intervals.push(
-        setInterval(vueInstance.uploadLocalTasks, config.int_upload_data * 1000)
-      )
+      // vueInstance.intervals.push(
+      //   setInterval(vueInstance.uploadLocalTasks, vueInstance.config.int_upload_data * 10000)
+      // )
 
-      vueInstance.intervals.push(
-        setInterval(vueInstance.uploadLocalFiles, config.int_upload_files * 1000)
-      )
+      // vueInstance.intervals.push(
+      //   setInterval(vueInstance.uploadLocalFiles, vueInstance.config.int_upload_files * 10000)
+      // )
     },
     tabSelected({ newIndex }) {
       this.tabIndex = newIndex

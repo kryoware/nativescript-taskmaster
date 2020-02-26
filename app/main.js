@@ -1,5 +1,9 @@
+// import VueDevtools from 'nativescript-vue-devtools'
+
 import Vue from 'nativescript-vue'
 import App from './components/App'
+
+// Vue.use(VueDevtools)
 
 import store from './store'
 
@@ -65,7 +69,7 @@ Vue.prototype.$callApi = (action, method, extras, headers) => {
     options = { ...options, ...{ headers } }
   }
 
-  console.error(`${url}/engine/api.php?${params}`)
+  console.warn('[API] ', { params })
 
   return fetch(`${url}/engine/api.php?${params}`, options)
 }

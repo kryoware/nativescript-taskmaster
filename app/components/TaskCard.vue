@@ -72,9 +72,6 @@ export default {
 
       return background
     }
-  },
-  mounted() {
-    console.warn(this.task)
   }
 }
 </script>
