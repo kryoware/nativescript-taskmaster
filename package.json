@@ -15,6 +15,7 @@
     }
   },
   "dependencies": {
+    "@nstudio/nativescript-loading-indicator": "^3.0.3",
     "@nstudio/nativescript-pulltorefresh": "^1.1.1",
     "@vue/devtools": "^5.3.3",
     "moment": "^2.24.0",

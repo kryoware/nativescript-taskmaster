@@ -6,6 +6,27 @@ import App from './components/App'
 // Vue.use(VueDevtools)
 
 import store from './store'
+import { LoadingIndicator, Mode } from '@nstudio/nativescript-loading-indicator'
+const indicator = new LoadingIndicator()
+const options = {
+  message: '',
+  margin: 0,
+  dimBackground: true,
+  color: '#004987',
+  // backgroundColor: '#ffffff',
+  backgroundColor: 'transparent',
+  // hideBezel: false,
+  hideBezel: true,
+  mode: Mode.Indeterminate,
+  android: {
+    cancelable: false
+  },
+  ios: {
+    square: false
+  }
+}
+Vue.prototype.$showLoader = extraOptions => indicator.show({ ...options, ...extraOptions })
+Vue.prototype.$hideLoader = () => indicator.hide()
 
 // Setup Sentry.io
 import { Sentry } from 'nativescript-sentry'

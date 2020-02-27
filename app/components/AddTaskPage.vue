@@ -2,7 +2,7 @@
   <Page backgroundColor="#f5f5f5">
     <ActionBar title="" icon="" flat="true" backgroundColor="transparent">
       <NavigationButton text="Back" icon="res://baseline_arrow_back_24" @tap="$navigateBack" />
-      <Label :text="isSaved ? 'New Task' : task.task_title" fontSize="24" class="tx-bold" color="#2e7d32" textAlignment="center" width="100%"/>
+      <Label :text="!isSaved ? 'New Task' : task.task_title" fontSize="24" class="tx-bold" color="#2e7d32" textAlignment="center" width="100%"/>
     </ActionBar>
 
     <StackLayout>
@@ -243,6 +243,7 @@ const SQLite = require('nativescript-sqlite')
 export default {
   data() {
     return {
+      temp_task_id: null,
       isSaved: false,
       isCheckedIn: false,
       task: {
@@ -257,6 +258,9 @@ export default {
         customer: null
       }
     }
+  },
+  mounted() {
+    this.temp_task_id = moment().format('X')
   },
   computed: {
     ...mapState({
@@ -328,7 +332,7 @@ export default {
         task_time_allocated: "", // FIXME: task_time_allocated
         assigned_to: "", // FIXME: assigned_to
         customer: this.task.customer,
-        task_id: "t".concat(moment().format('X')),
+        task_id: "t".concat(this.temp_task_id),
         uid: this.user.uid,
         task_tag: "", // FIXME: task_tag
         task_title: this.task.task_title,

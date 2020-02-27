@@ -1,11 +1,11 @@
 <template>
   <FlexboxLayout flexDirection="column">
     <StackLayout margin="24" flexShrink="1">
-      <Label :text="`Connection Type: ${connection.type}`" />
-      <Label :text="`SSID: ${connection.ssid}`" />
+      <Label :text="`DT_CONFIG: ${dt_config}`" />
+      <Label :text="`DT_TASKS: ${dt_tasks}`" />
     </StackLayout>
 
-    <StackLayout margin="24" flexShrink="1">
+    <StackLayout margin="0 24 24 24" flexShrink="1">
       <Label :text="`DT_CONFIG: ${dt_config}`" />
       <Label :text="`DT_TASKS: ${dt_tasks}`" />
     </StackLayout>
@@ -41,12 +41,12 @@
 import { mapState } from 'vuex'
 
 export default {
-  props: {
-    connection: {
-      type: Object,
-      required: true
-    }
-  },
+  // props: {
+  //   connection: {
+  //     type: Object,
+  //     required: true
+  //   }
+  // },
   computed: {
     ...mapState({
       dt_tasks: state => state.dt_tasks,
