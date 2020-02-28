@@ -29,7 +29,7 @@ Vue.prototype.$showLoader = extraOptions => indicator.show({ ...options, ...extr
 Vue.prototype.$hideLoader = () => indicator.hide()
 
 // Setup Sentry.io
-import { Sentry } from 'nativescript-sentry'
+import { Sentry, Level } from 'nativescript-sentry'
 
 const dsn = 'https://86cc5b9a9bb645d8944b44c86a5a75a2@sentry.io/2345888'
 Sentry.init(dsn)
@@ -90,7 +90,15 @@ Vue.prototype.$callApi = (action, method, extras, headers) => {
     options = { ...options, ...{ headers } }
   }
 
-  console.warn('[API] ', { params })
+  if (action != 'statcheck') {
+    Sentry.captureMessage('[API]', {
+      level: Level.Debug,
+      extra: {
+        params
+      }
+    })
+    console.warn('[API] ', { params })
+  }
 
   return fetch(`${url}/engine/api.php?${params}`, options)
 }

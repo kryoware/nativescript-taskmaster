@@ -373,10 +373,11 @@ export default {
             console.warn("ADD TASK PAGE ", result)
 
             vueInstance.addTask(task)
-            vueInstance.isSaved = true
+
+            vueInstance.$navigateBack()
           })
           .catch(error => {
-            console.error(error)
+            console.error("ADD TASK PAGE ", error)
             alert('Failed to save task locally')
           })
       }, error => console.error("[SQLITE] CONNECT: ", error))

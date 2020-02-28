@@ -4,11 +4,12 @@
 
       <FlexboxLayout justifyContent="space-between" marginBottom="16">
         <StackLayout padding="4 8" 
-          backgroundColor="#dcdcdc"
+          :backgroundColor="statusBackground"
           borderRadius="4">
+
         <Label :text="task.task_status" class="tx-bold task-tag" textAlignment="center" fontSize="12" 
-          color="white"
-          
+          borderRadius="32"
+          :color="statusColor"
         />
         </StackLayout>
 
@@ -46,6 +47,40 @@ export default {
     }
   },
   computed: {
+    statusColor() {
+      let background = ''
+
+      switch (this.task.task_status) {
+        case 'done':
+          background = 'rgb(100, 181, 246)'
+          break;
+        case 'pending':
+          background = ''
+          break;
+        case 'started':
+          background = 'rgb(102, 207, 132)'
+          break;
+        case 'paused':
+          background = 'rgb(255, 173, 148)'
+          break;
+      }
+
+      return background
+    },
+    statusBackground() {
+      let background = ''
+
+      switch (this.task.task_status) {
+        case 'pending':
+          background = '#dcdcdc'
+          break;
+        default:
+          background = '#fff'
+          break;
+      }
+
+      return background
+    },
     date() {
       return moment(this.task.sechedule).format('MMM DD')
     },

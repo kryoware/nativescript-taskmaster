@@ -8,7 +8,7 @@
     <DockLayout stretchLastChild="true">
       <FlexboxLayout dock="bottom" justifyContent="space-between" width="100%" padding="24">
         <MDButton
-          text="Add Photo"
+          text="Add"
           color="#2e7d32"
           rippleColor="#2e7d32"
           backgroundColor="white"
@@ -42,16 +42,17 @@
 
       <StackLayout dock="center">
         <ScrollView height="100%">
-          <FlexboxLayout width="100%" justifyContent="center" flexDirection="column">
+          <FlexboxLayout width="100%" :justifyContent="images.length === 0 ? 'center': 'flex-start'" flexDirection="column">
             <Label v-if="images.length === 0" text="No images added yet" color="#2b2b2b" class="tx-medium" fontSize="18" textAlignment="center"/>
 
-            <WrapLayout v-else backgroundColor="red" width="100%">
+            <WrapLayout v-else width="100%">
 
               <StackLayout
-                width="50%" 
+                width="50%"
                 v-for="(image, key) in images"
                 :key="key">
-                  <StackLayout 
+                  <Label color="#2b2b2b" class="tx-regular" fontSize="12" :text="`Image ${key + 1}`" textAlingment="center"/>
+                  <StackLayout
                     width="200"
                     height="200"
                     margin="8">
@@ -63,9 +64,21 @@
                     />
                   </StackLayout>
 
-                <TextField
-                  :placeholder="`Image ${key + 1} Label`"
-                  v-model="imageLabels[key]"/>
+                  <StackLayout v-if="imageLabels[key].saved">
+                    <Label :text="imageLabels[key].label" textWrap="true" color="#2b2b2b" class="tx-regular"/>
+                    <Button text="Edit Label (TODO)" @tap="onEditTap(key)" />
+                  </StackLayout>
+
+                  <StackLayout v-else>
+                    <TextField
+                      :hint="`Image ${key + 1} Label`"
+                      class="tx-regular"
+                      v-model="imageLabels[key].label"/>
+                    <Button text="Save" @tap="onSaveTap(key)" />
+                  </StackLayout>
+
+                  <Button text="Remove" @tap="onRemoveTap(key)" />
+
               </StackLayout>
 
             </WrapLayout>
@@ -86,10 +99,20 @@ import { mapState } from 'vuex'
 
 import * as fs from 'file-system'
 
+const SQLite = require('nativescript-sqlite')
+
 export default {
   props: {
     task: {
       type: Object,
+      required: true
+    },
+    images_: {
+      type: Array,
+      required: true
+    },
+    imageLabels_: {
+      type: Array,
       required: true
     }
   },
@@ -106,9 +129,16 @@ export default {
     })
   },
   mounted() {
-    console.warn(this.user)
-    console.warn(this.config)
-    console.warn(this.task)
+    console.warn('--- ADD PHOTO ---')
+    console.warn(this.images_)
+    console.warn(this.imageLabels_)
+
+    try {
+      this.images = [ ...this.images, ...this.images_ ]
+      this.imageLabels = [ ...this.imageLabels, ...this.imageLabels_ ]
+    } catch (error) {
+      console.error('merge', error)
+    }
   },
   methods: {
     testPayload() {
@@ -120,6 +150,128 @@ export default {
       console.warn({
         images,
         imageLabels
+      })
+    },
+    onEditTap(key) {
+      alert('TODO')
+
+      // replace text of file
+    },
+    onRemoveTap(key) {
+      try {
+        let filename = this.images[key]
+
+        const folder = fs.knownFolders.documents()
+
+        const imgFile = folder.getFile(filename.substr(filename.lastIndexOf('/') + 1))
+        imgFile.removeSync(error => console.error('delete imgFile', error))
+
+        const txtFile = folder.getFile(filename.substr(filename.lastIndexOf('/') + 1, filename.lastIndexOf('.')).concat('.txt'))
+        txtFile.removeSync(error => console.error('delete txtFile', error))
+
+        folder.eachEntity(e => {
+          if (['.jpg', '.jpeg', '.png', '.txt'].includes(e.extension)) {
+            console.warn(e.path)
+          }
+        })
+
+        if (this.imageLabels[key].saved) {
+          console.warn('DELETE FROM STORAGE')
+
+          const str = this.images[key]
+          let files = [
+            "'".concat(str.substr(0, str.lastIndexOf('.')).concat('.txt'), "'"),
+            "'".concat(str, "'"),
+          ].join(',')
+
+          const vueInstance = this
+
+          this.$showLoader()
+          console.warn('UPDATE files SET status = ? WHERE filename IN ('.concat(
+                files,
+                ')'
+              ))
+
+          new SQLite('offline_sync.db').then(db => {
+            db.execSQL('UPDATE files SET status = ? WHERE filename IN ('.concat(
+                files,
+                ')'
+              ),
+              "deleted"
+            )
+            .then(result => {
+              vueInstance.$hideLoader()
+              console.warn('REMOVE FROM QUEUE', result)
+              this.images.splice(parseInt(key), 1)
+              this.imageLabels.splice(parseInt(key), 1)
+            })
+            .catch(error => {
+              vueInstance.$hideLoader()
+              alert({ title: 'DB ERROR', message: error })
+              console.error('REMOVE FROM QUEUE', error)
+            })
+          },
+          error => {
+            console.error("[SQLITE] CONNECT: ", error)
+          })
+        } else {
+          this.images.splice(parseInt(key), 1)
+          this.imageLabels.splice(parseInt(key), 1)
+        }
+      } catch (error) {
+        console.error('DELETE FROM STORAGE', error)
+      }
+    },
+    onSaveTap(key) {
+      const vueInstance = this
+
+      this.$showLoader()
+
+      new SQLite('offline_sync.db').then(db => {
+        try {
+          const filename = `${this.user.uid}_${this.task.task_id}_pic_${key + 1}.txt`
+          const folder = fs.knownFolders.documents()
+          const file = folder.getFile(filename)
+
+          const imageFile = vueInstance.images[key]
+
+          console.warn(imageFile)
+          // imageFile = imageFile.substr(imageFile.lastIndexOf('/') + 1)
+
+          db.execSQL('INSERT INTO files (filename, task_id, status) VALUES (?, ?, ?)', [ imageFile, this.task.task_id, 'pending' ])
+            .then(result => {
+              console.warn('[SQLITE] Queue Image File', result)
+
+              file.writeText(vueInstance.imageLabels[key].label)
+                .then(() => {
+                  console.warn('writeText')
+
+                  db.execSQL('INSERT INTO files (filename, task_id, status) VALUES (?, ?, ?)', [ file.path, this.task.task_id, 'pending' ])
+                    .then(result => {
+                      console.warn('[SQLITE] Queue Image Label', result)
+
+                      vueInstance.$hideLoader()
+                      vueInstance.imageLabels[key].saved = true
+                    })
+                    .catch(error => {
+                      vueInstance.$hideLoader()
+                      alert({ title: 'DB ERROR', message: error })
+                      console.error('[SQLITE] Queue Image Label', error)
+                    })
+                })
+                .catch(error => console.error('writeText', error))
+            })
+            .catch(error => {
+              vueInstance.$hideLoader()
+              alert({ title: 'DB ERROR', message: error })
+              console.error('[SQLITE] Queue Image File', error)
+            })
+        } catch (error) {
+          console.error('Create image file', error)
+        }
+      },
+      error => {
+        console.error("[SQLITE] CONNECT: ", error)
       })
     },
     onAddPhotoTap(args) {
@@ -143,43 +295,34 @@ export default {
 
         // Should come from config
         const format = image.substr(image.indexOf('.') + 1)
-        const quality = 80
+        const quality = parseInt(this.config.jpeg_quality)
 
         try {
           ImageSource.fromAsset(e)
           .then(imageSource => {
             try {
-              const fileName = `${this.user.uid}_${this.task.task_id}_pic_${imgIndex + 1}.${format}`
-              
-              console.warn({ fileName })
+              const filename = `${this.user.uid}_${this.task.task_id}_pic_${this.images.length + 1}.${format}`
+              const folder = fs.knownFolders.documents().path
+              const filePath = fs.path.join(folder, filename)
+              const saved = imageSource.saveToFile(filePath, format, quality)
 
-              const path = android.os.Environment.getExternalStorageDirectory().toString()
-              const folder = fs.Folder.fromPath(fs.path.join(path, '.WorkForce', fileName))
-              const saved = imageSource.saveToFile(folder, format, quality)
-
-              console.warn({
-                saved: saved.path
-              })
-
-              // if (saved) {
-              //   console.warn({ fileName })
-              //   console.warn({ filePath })
-
-              //   this.images.push(filePath)
-              // }
+              if (saved) {
+                this.images.push(filePath)
+                this.imageLabels.push({
+                  label: '',
+                  saved: false
+                })
+              }
             } catch (error) {
-              console.error('Compress Image')
-              console.error(error)
+              console.error('Compress Image', error)
             }
           })
           .catch(error => {
             // Sentry.captureException(error)
-            console.error('ImageSource')
-            console.error(error)
+            console.error('ImageSource', error)
           })
         } catch (error) {
-          console.error('ImageSource')
-          console.error(error)
+          console.error('fromAsset', error)
         }
       })
     },

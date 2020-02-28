@@ -32,7 +32,7 @@
             <MDTextField
               hint="Instructions"
               @loaded="initMultiline"
-              
+
               :text="task.instructions"
               errorEnabled="true"
               floating="true"
@@ -52,7 +52,7 @@
             <MDTextField
               hint="Address"
               @loaded="initMultiline"
-              
+
               :text="task.location"
               errorEnabled="true"
               floating="true"
@@ -72,7 +72,7 @@
             <MDTextField
               hint="Notes"
               @loaded="initMultiline"
-              
+
               :text="task.notes"
               errorEnabled="true"
               floating="true"
@@ -114,16 +114,18 @@
                   borderRadius="48"
                   class="tx-bold"
                   flexShrink="1"
+                  @tap="onCheckOutTap"
                   />
                 <MDButton
                   text="Pause"
                   color="white"
                   backgroundColor="#757575"
                   variant="flat"
-                padding="16 32"
+                  padding="16 32"
                   borderRadius="48"
                   class="tx-bold"
                   flexShrink="1"
+                  @tap="onPauseTap"
                   />
               </FlexboxLayout>
             </StackLayout>
@@ -146,7 +148,7 @@
 
             <MDButton
               v-if="isCheckedIn"
-              text="Add Photo"
+              text="Add Photos"
               color="#2e7d32"
               rippleColor="#2e7d32"
               backgroundColor="white"
@@ -173,7 +175,6 @@
             />
 
           </FlexboxLayout>
-
         </StackLayout>
       </ScrollView>
     </StackLayout>
@@ -181,11 +182,21 @@
 </template>
 
 <script>
-import { mapActions } from 'vuex'
+import { mapActions, mapState } from 'vuex'
+import moment from 'moment'
+
+import * as geolocation from 'nativescript-geolocation'
+import { Accuracy } from 'tns-core-modules/ui/enums'
 
 import MapPage from './MapPage'
 import AddPhotoPage from './AddPhotoPage'
 import AddReport from './AddReport'
+
+import * as fs from 'file-system'
+import { ImageSource } from 'tns-core-modules/image-source/image-source'
+import SelfieModalVue from './SelfieModal.vue'
+
+const SQLite = require('nativescript-sqlite')
 
 export default {
   props: {
@@ -194,17 +205,119 @@ export default {
       required: true
     }
   },
+  computed: {
+    ...mapState({
+      user: state => state.user
+    })
+  },
   data() {
     return {
       isCheckedIn: false,
-      report: ''
+      report: '',
+      logs: [],
+      images: [],
+      imageLabels: [],
+      task_: {},
     }
   },
   mounted() {
-    console.warn(this.task)
+    const vueInstance = this
+
+    new SQLite('offline_sync.db').then(db => {
+      db.all('SELECT dt_log, log_type, user_report, gps_coords, gps_accuracy, gps_time, gps_source, task_id FROM data_logs WHERE task_id = ?', this.task.task_id)
+        .then(result => {
+          if (result.length > 0) {
+            const lastRow = result[result.length - 1]
+
+            if (lastRow[1] === 'check_in') {
+              this.isCheckedIn = true
+            } else if (lastRow[1] === 'check_out') {
+
+            } else {
+              console.warn('NOT CHECK IN AND CHECK OUT')
+            }
+
+            result.forEach(row => {
+              console.warn('data_log')
+              vueInstance.logs.push(`dt_log: ${row[0]}\nlog_type: ${row[1]}\nuser_report: ${row[2]}\ngps_coords: ${row[3]}\ngps_accuracy: ${row[4]}\ngps_time: ${row[5]}\ngps_source: ${row[6]}\ntask_id: ${row[7]}\n--- `)
+            })
+          }
+        })
+        .catch(error => {
+          console.error('logs query', error)
+        })
+
+      db.all(`SELECT filename FROM files WHERE status IN ('pending','done') AND task_id = ?`, [ this.task.task_id ])
+        .then(result => {
+          console.warn('[SQLITE] Task Photos', result)
+          // [
+          //   [2, /data/user/0/org.nativescript.application/files/1_11_pic_1.png, 11],
+          //   [3, /data/user/0/org.nativescript.application/files/1_11_pic_1.txt, 11]
+          // ]
+
+          result.forEach(file => {
+            let filename = file[0]
+            let extension = filename.substr(filename.lastIndexOf('.') + 1)
+
+            console.warn({
+              filename,
+              extension
+            })
+
+            switch (extension) {
+              case 'txt':
+                // get file content
+                try {
+                  const fileName = filename.substr(filename.lastIndexOf('/') + 1)
+                  console.warn({ fileName })
+                  const folder = fs.knownFolders.documents()
+                  const file = folder.getFile(fileName)
+
+                  file.readText()
+                    .then(text => {
+                      console.warn('readText', text)
+
+                      this.imageLabels.push({
+                        label: text,
+                        saved: true
+                      })
+                    })
+                    .catch(error => {
+                      console.error('readText', error)
+                    })
+                } catch (error) {
+                  console.error('read label file', error)
+                }
+                break
+              default:
+                this.images.push(filename)
+                break
+            }
+          })
+        })
+        .catch(error => {
+          console.error('[SQLITE] Task Photos', error)
+        })
+    },
+    error => {
+      console.error("[SQLITE] CONNECT: ", error)
+    })
   },
   methods: {
-    ...mapActions(['setTaskStatus']),
+    ...mapActions(['setTaskStatus', 'updateTask']),
+    onPauseTap(args) {
+      // alert('TODO')
+      this.$showModal(SelfieModalVue, {
+        props: {
+          uid: ''.concat(this.user.uid),
+          task_id: ''.concat(this.task.task_id),
+          action: 'in',
+        }
+      })
+      .then(result => {
+        console.warn(result)
+      })
+    },
     onViewMapTap(args) {
       this.$navigateTo(MapPage, {
         transition: {
@@ -213,10 +326,70 @@ export default {
       })
     },
     onAddPhotoTap(args) {
-      this.$navigateTo(AddPhotoPage, {
-        transition: {
-          name: 'slideTop'
-        }
+      const vueInstance = this
+
+      this.imageLabels = []
+      this.images = []
+
+      new SQLite('offline_sync.db').then(db => {
+        db.all(`SELECT filename FROM files WHERE status IN ('pending','done') AND task_id = ?`, [ this.task.task_id ])
+          .then(result => {
+            result.forEach(file => {
+              let filename = file[0]
+              let extension = filename.substr(filename.lastIndexOf('.') + 1)
+
+              switch (extension) {
+                case 'txt':
+                  // get file content
+                  try {
+                    const fileName = filename.substr(filename.lastIndexOf('/') + 1)
+                    const folder = fs.knownFolders.documents()
+                    const file = folder.getFile(fileName)
+
+                    const label = file.readTextSync(error => {
+                      console.error('readText', error)
+                    })
+
+                    vueInstance.imageLabels.push({
+                      label,
+                      saved: true,
+                    })
+                  } catch (error) {
+                    console.error('read label file', error)
+                  }
+                  break
+                default:
+                  vueInstance.images.push(filename)
+                  // ImageSource.fromFile(filename)
+                  //   .then(image => {
+                  //     console.warn('create image', image.android)
+
+                  //     this.images.push(image.android)
+                  //   })
+                  //   .catch(error => {
+                  //     console.error('create image', error)
+                  //   })
+                  break
+              }
+            })
+
+            vueInstance.$navigateTo(AddPhotoPage, {
+              props: {
+                task: vueInstance.task,
+                images_: vueInstance.images,
+                imageLabels_: vueInstance.imageLabels
+              },
+              transition: {
+                name: 'slideTop'
+              }
+            })
+          })
+          .catch(error => {
+            console.error('[SQLITE] Task Photos', error)
+          })
+      },
+      error => {
+        console.error("[SQLITE] CONNECT: ", error)
       })
     },
     closeCallback(report) {
@@ -245,11 +418,142 @@ export default {
         console.error(error)
       }
     },
+    onCheckOutTap(args) {
+      const vueInstance = this
+      this.isCheckedIn = false
+
+      geolocation.enableLocationRequest(true, true).then(() => {
+        geolocation.getCurrentLocation({
+          desiredAccuracy: Accuracy.high,
+          maximumAge: 5000,
+        })
+        .then(function (loc) {
+          try {
+            const {
+              horizontalAccuracy,
+              verticalAccuracy,
+              timestamp,
+              latitude,
+              longitude,
+            } = loc
+
+            vueInstance.task_ = {
+              dt_log: moment().format('Y-MM-DD H:mm'),
+              log_type: "check_out",
+              user_report: "", // FIXME: user_report
+              gps_coords: `${latitude},${longitude}`,
+              gps_accuracy: (horizontalAccuracy + verticalAccuracy) / 2,
+              gps_time: moment().format('Y-MM-DD H:mm'),
+              gps_source: "gps",
+              task_id: vueInstance.task.task_id,
+              task_status: 'done'
+            }
+
+            const values = [
+              vueInstance.task_.dt_log,
+              vueInstance.task_.log_type,
+              vueInstance.task_.user_report,
+              vueInstance.task_.gps_coords,
+              vueInstance.task_.gps_accuracy,
+              vueInstance.task_.gps_time,
+              vueInstance.task_.gps_source,
+              vueInstance.task_.task_id,
+            ]
+
+            new SQLite('offline_sync.db').then(db => {
+              db.execSQL("INSERT INTO data_logs (dt_log, log_type, user_report, gps_coords, gps_accuracy, gps_time, gps_source, task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", values)
+                .then(result => {
+                  console.warn('data_log', result)
+                  console.warn(vueInstance.task_)
+                  vueInstance.updateTask(vueInstance.task_)
+                })
+                .catch(error => {
+                  console.error('Check In SQL INSERT', error)
+                })
+            },
+            error => {
+              console.error("[SQLITE] CONNECT: ", error)
+            })
+          } catch (error) {
+            console.error('check in payload', error)
+          }
+        }, function (e) {
+          console.error(e)
+        })
+      }, (e) => {
+        console.error('Error: ' + (e.message || e))
+      }).catch(ex => {
+        console.error('Unable to Enable Location', ex)
+      })
+    },
     onCheckInTap(args) {
-      console.warn('Checking In')
-      
       // Change UI
       this.isCheckedIn = true
+      const vueInstance = this
+
+      geolocation.enableLocationRequest(true, true).then(() => {
+        geolocation.getCurrentLocation({
+          desiredAccuracy: Accuracy.high,
+          maximumAge: 5000,
+        })
+        .then(function (loc) {
+          try {
+            const {
+              horizontalAccuracy,
+              verticalAccuracy,
+              timestamp,
+              latitude,
+              longitude,
+            } = loc
+
+            vueInstance.task_ = {
+              dt_log: moment().format('Y-MM-DD H:mm'),
+              log_type: "check_in",
+              user_report: "", // FIXME: user_report
+              gps_coords: `${latitude},${longitude}`,
+              gps_accuracy: (horizontalAccuracy + verticalAccuracy) / 2,
+              gps_time: moment().format('Y-MM-DD H:mm'),
+              gps_source: "gps",
+              task_id: vueInstance.task.task_id,
+              task_status: 'started'
+            }
+
+            const values = [
+              vueInstance.task_.dt_log,
+              vueInstance.task_.log_type,
+              vueInstance.task_.user_report,
+              vueInstance.task_.gps_coords,
+              vueInstance.task_.gps_accuracy,
+              vueInstance.task_.gps_time,
+              vueInstance.task_.gps_source,
+              vueInstance.task_.task_id,
+            ]
+
+            new SQLite('offline_sync.db').then(db => {
+              db.execSQL("INSERT INTO data_logs (dt_log, log_type, user_report, gps_coords, gps_accuracy, gps_time, gps_source, task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", values)
+                .then(result => {
+                  console.warn('data_log', result)
+                  console.warn(vueInstance.task_)
+                  vueInstance.updateTask(vueInstance.task_)
+                })
+                .catch(error => {
+                  console.error('Check In SQL INSERT', error)
+                })
+            },
+            error => {
+              console.error("[SQLITE] CONNECT: ", error)
+            })
+          } catch (error) {
+            console.error('check in payload', error)
+          }
+        }, function (e) {
+          console.error(e)
+        })
+      }, (e) => {
+        console.error('Error: ' + (e.message || e))
+      }).catch(ex => {
+        console.error('Unable to Enable Location', ex)
+      })
     }
   }
 
