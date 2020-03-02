@@ -1,9 +1,9 @@
 <template>
   <Page backgroundColor="#f5f5f5">
     <ActionBar title="" icon="" flat="true" backgroundColor="transparent">
-      <NavigationButton text="Back" icon="res://baseline_arrow_back_24" @tap="$navigateBack" />
+      <NavigationButton text="Back" icon="res://ic_action_back" @tap="$navigateBack" />
       <Label text="Task Details" fontSize="24" class="tx-bold" color="#2e7d32" textAlignment="center" width="100%"/>
-      <ActionItem icon="" text="Save" ios.position="right" @tap="onSaveChangesTap" isEn/>
+      <ActionItem icon="res://ic_action_save" text="Save" ios.position="right" @tap="onSaveChangesTap" />
     </ActionBar>
 
     <StackLayout>
@@ -33,7 +33,7 @@
             <MDTextField
               hint="Instructions"
               @loaded="initMultiline"
-
+              @textChange="({ value }) => { this.task_.instructions = value }"
               :text="task_.instructions"
               errorEnabled="true"
               floating="true"
@@ -47,13 +47,13 @@
               paddingLeft="0"
               paddingRight="0"
               class="tx-regular"
-              marginBottom="16"
+              marginBottom="16" 
             />
 
             <MDTextField
               hint="Address"
               @loaded="initMultiline"
-
+              @textChange="({ value }) => { this.task_.location = value }"
               :text="task_.location"
               errorEnabled="true"
               floating="true"
@@ -73,7 +73,7 @@
             <MDTextField
               hint="Notes"
               @loaded="initMultiline"
-
+              @textChange="({ value }) => { this.task_.notes = value }"
               :text="task_.notes"
               errorEnabled="true"
               floating="true"
@@ -118,6 +118,19 @@
                   @tap="onCheckOutTap"
                   />
                 <MDButton
+                  v-if="isPaused"
+                  text="Resume"
+                  color="white"
+                  backgroundColor="#757575"
+                  variant="flat"
+                  padding="16 32"
+                  borderRadius="48"
+                  class="tx-bold"
+                  flexShrink="1"
+                  @tap="onResumeTap"
+                  />
+                <MDButton
+                  v-else
                   text="Pause"
                   color="white"
                   backgroundColor="#757575"
@@ -210,26 +223,17 @@ export default {
     ...mapState({
       user: state => state.user
     }),
-    isModified() {
-      let original = Object.values(this.task)
-      let modified = Object.values(this.task_)
-
-      // FIXME: Remove debugging
-      let diff = original.filter(value => !modified.includes(value)).length
-      console.warn({ diff })
-
-      return diff > 0
-      // FIXME: Remove debugging
-    }
   },
   data() {
     return {
+      isPaused: false,
       isCheckedIn: false,
       report: '',
       logs: [],
       images: [],
       imageLabels: [],
       task_: {},
+      data: {}
     }
   },
   mounted() {
@@ -241,6 +245,7 @@ export default {
         .then(result => {
           if (result.length > 0) {
             const lastRow = result[result.length - 1]
+            console.warn('Task Status:', lastRow[1])
 
             if (lastRow[1] === 'check_in') {
               this.isCheckedIn = true
@@ -249,11 +254,6 @@ export default {
             } else {
               console.warn('NOT CHECK IN AND CHECK OUT')
             }
-
-            result.forEach(row => {
-              console.warn('data_log')
-              vueInstance.logs.push(`dt_log: ${row[0]}\nlog_type: ${row[1]}\nuser_report: ${row[2]}\ngps_coords: ${row[3]}\ngps_accuracy: ${row[4]}\ngps_time: ${row[5]}\ngps_source: ${row[6]}\ntask_id: ${row[7]}\n--- `)
-            })
           }
         })
         .catch(error => {
@@ -306,44 +306,229 @@ export default {
   methods: {
     ...mapActions(['setTaskStatus', 'updateTask']),
     onSaveChangesTap(args) {
-      if (this.isModified) {
-        console.warn(this.task_)
-      // const values = [
+      let original = Object.values(this.task)
+      let modified = Object.values(this.task_)
+      let isModified = original.filter(value => !modified.includes(value)).length > 0
+      let vueInstance = this
 
-      // ]
+      if (isModified) {
+        const values = [
+          this.task_.instructions,
+          this.task_.location,
+          this.task_.notes
+        ]
 
-      // new SQLite('offline_sync.db').then(db => {
-      //   db.execSQL("", values)
-      //     .then(result => {
-      //       console.warn('data_log', result)
-      //       console.warn(vueInstance.task_)
-      //       vueInstance.updateTask(vueInstance.task_)
-      //     })
-      //     .catch(error => {
-      //       console.error('Check In SQL INSERT', error)
-      //     })
+        new SQLite('offline_sync.db').then(db => {
+          db.execSQL(`UPDATE tasks SET status = 'pending',
+              instructions = ?,
+              location = ?,
+              notes = ?
+            `, values)
+            .then(result => {
+              console.warn('data_log', result)
+              console.warn(vueInstance.task_)
+              vueInstance.updateTask(vueInstance.task_)
+            })
+            .catch(error => {
+              console.error('Check In SQL INSERT', error)
+            })
+        },
+        error => {
+          console.error("[SQLITE] CONNECT: ", error)
+        })
+      }
+    },
+    onResumeTap(args) {
+      try {
+        const vueInstance = this
+        this.isPaused = false
 
+        geolocation.enableLocationRequest(true, true).then(() => {
+          geolocation.getCurrentLocation({
+            desiredAccuracy: Accuracy.high,
+            maximumAge: 5000,
+          })
+          .then(function (loc) {
+            try {
+              const {
+                horizontalAccuracy,
+                verticalAccuracy,
+                timestamp,
+                latitude,
+                longitude,
+                altitude
+              } = loc
+
+              vueInstance.task_ = {
+                ...vueInstance.task_,
+                dt_log: moment().format('Y-MM-DD H:mm'),
+                log_type: "check_out",
+                user_report: "", // FIXME: user_report
+                gps_coords: `${latitude},${longitude}`,
+                gps_accuracy: (horizontalAccuracy + verticalAccuracy) / 2,
+                gps_time: timestamp,
+                gps_source: "gps",
+                gps_alt: altitude,
+                task_id: vueInstance.task.task_id,
+                task_status: 'done',
+              }
+
+              const values = [
+                vueInstance.task_.dt_log,
+                vueInstance.task_.log_type,
+                vueInstance.task_.user_report,
+                vueInstance.task_.gps_coords,
+                vueInstance.task_.gps_accuracy,
+                vueInstance.task_.gps_time,
+                vueInstance.task_.gps_source,
+                vueInstance.task_.task_id,
+                vueInstance.task_.gps_alt,
+              ]
+
+              new SQLite('offline_sync.db').then(db => {
+                // FIXME: Check this status
+                db.execSQL(`UPDATE tasks SET status = 'started'`)
+                  .then(result => {
+                    console.warn('resume task', result)
+                    console.warn(vueInstance.task_)
+                    vueInstance.updateTask(vueInstance.task_)
+                  })
+                  .catch(error => {
+                    console.error('resume task', error)
+                  })
+
+                // Add task update
+                db.execSQL("INSERT INTO data_logs (dt_log, log_type, user_report, gps_coords, gps_accuracy, gps_time, gps_source, task_id, gps_alt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", values)
+                  .then(result => {
+                    console.warn('resume task update', result)
+                  })
+                  .catch(error => {
+                    console.error('resume task update', error)
+                  })
+              },
+              error => {
+                console.error("[SQLITE] CONNECT: ", error)
+              })
+
+            } catch (error) {
+              console.error('check in payload', error)
+            }
+          }, function (e) {
+            console.error(e)
+          })
+        }, (e) => {
+          console.error('Error: ' + (e.message || e))
+        }).catch(ex => {
+          console.error('Unable to Enable Location', ex)
+        })
+      } catch (error) {
+        console.error('resume tap', error)
       }
     },
     onPauseTap(args) {
+      try {
+        const vueInstance = this
+        this.isPaused = true
+
+        geolocation.enableLocationRequest(true, true).then(() => {
+          geolocation.getCurrentLocation({
+            desiredAccuracy: Accuracy.high,
+            maximumAge: 5000,
+          })
+          .then(function (loc) {
+            try {
+              const {
+                horizontalAccuracy,
+                verticalAccuracy,
+                timestamp,
+                latitude,
+                longitude,
+                altitude
+              } = loc
+
+              vueInstance.task_ = {
+                ...vueInstance.task_,
+                dt_log: moment().format('Y-MM-DD H:mm'),
+                log_type: "check_out",
+                user_report: "", // FIXME: user_report
+                gps_coords: `${latitude},${longitude}`,
+                gps_accuracy: (horizontalAccuracy + verticalAccuracy) / 2,
+                gps_time: timestamp,
+                gps_source: "gps",
+                gps_alt: altitude,
+                task_id: vueInstance.task.task_id,
+                task_status: 'done',
+              }
+
+              const values = [
+                vueInstance.task_.dt_log,
+                vueInstance.task_.log_type,
+                vueInstance.task_.user_report,
+                vueInstance.task_.gps_coords,
+                vueInstance.task_.gps_accuracy,
+                vueInstance.task_.gps_time,
+                vueInstance.task_.gps_source,
+                vueInstance.task_.task_id,
+                vueInstance.task_.gps_alt,
+              ]
+
+              new SQLite('offline_sync.db').then(db => {
+                db.execSQL(`UPDATE tasks SET status = 'paused'`)
+                  .then(result => {
+                    console.warn('pause task', result)
+                    console.warn(vueInstance.task_)
+                    vueInstance.updateTask(vueInstance.task_)
+                  })
+                  .catch(error => {
+                    console.error('pause task', error)
+                  })
+
+                // Add task update
+                db.execSQL("INSERT INTO data_logs (dt_log, log_type, user_report, gps_coords, gps_accuracy, gps_time, gps_source, task_id, gps_alt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", values)
+                  .then(result => {
+                    console.warn('pause task update', result)
+                  })
+                  .catch(error => {
+                    console.error('pause task update', error)
+                  })
+                
+              },
+              error => {
+                console.error("[SQLITE] CONNECT: ", error)
+              })
+            } catch (error) {
+              console.error('check in payload', error)
+            }
+          }, function (e) {
+            console.error(e)
+          })
+        }, (e) => {
+          console.error('Error: ' + (e.message || e))
+        }).catch(ex => {
+          console.error('Unable to Enable Location', ex)
+        })
+      } catch (error) {
+        console.error('onPauseTap', error)
+      }
+
       // alert('TODO')
-      this.$showModal(SelfieModalVue, {
-        props: {
-          uid: ''.concat(this.user.uid),
-          task_id: ''.concat(this.task.task_id),
-          action: 'in',
-        }
-      })
-      .then(result => {
-        console.warn(result)
-      })
+      // this.$showModal(SelfieModalVue, {
+      //   props: {
+      //     uid: ''.concat(this.user.uid),
+      //     task_id: ''.concat(this.task.task_id),
+      //     action: 'in',
+      //   }
+      // })
+      // .then(result => {
+      //   console.warn(result)
+      // })
     },
     onViewMapTap(args) {
-      this.$navigateTo(MapPage, {
-        transition: {
-          name: 'slideTop'
-        }
-      })
+      // this.$navigateTo(MapPage, {
+      //   transition: {
+      //     name: 'slideTop'
+      //   }
+      // })
     },
     onAddPhotoTap(args) {
       const vueInstance = this
@@ -459,12 +644,13 @@ export default {
             } = loc
 
             vueInstance.task_ = {
+              ...vueInstance.task_,
               dt_log: moment().format('Y-MM-DD H:mm'),
               log_type: "check_out",
               user_report: "", // FIXME: user_report
               gps_coords: `${latitude},${longitude}`,
               gps_accuracy: (horizontalAccuracy + verticalAccuracy) / 2,
-              gps_time: moment().format('Y-MM-DD H:mm'),
+              gps_time: timestamp,
               gps_source: "gps",
               gps_alt: altitude,
               task_id: vueInstance.task.task_id,
@@ -484,6 +670,17 @@ export default {
             ]
 
             new SQLite('offline_sync.db').then(db => {
+              db.execSQL(`UPDATE tasks SET
+                task_end = datetime('now'),
+                task_status = 'done'
+                `)
+                .then(result => {
+                  console.warn('update task -> check out', result)
+                })
+                .catch(error => {
+                  console.error('update task -> check out', error)
+                })
+
               db.execSQL("INSERT INTO data_logs (dt_log, log_type, user_report, gps_coords, gps_accuracy, gps_time, gps_source, task_id, gps_alt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", values)
                 .then(result => {
                   console.warn('data_log', result)
@@ -510,6 +707,7 @@ export default {
       })
     },
     onCheckInTap(args) {
+      console.warn('checkintap')
       // Change UI
       this.isCheckedIn = true
       const vueInstance = this
@@ -520,6 +718,8 @@ export default {
           maximumAge: 5000,
         })
         .then(function (loc) {
+          console.warn('checkintap - loc')
+
           try {
             const {
               horizontalAccuracy,
@@ -530,15 +730,16 @@ export default {
             } = loc
 
             vueInstance.task_ = {
+              ...vueInstance.task_,
               dt_log: moment().format('Y-MM-DD H:mm'),
               log_type: "check_in",
               user_report: "", // FIXME: user_report
               gps_coords: `${latitude},${longitude}`,
               gps_accuracy: (horizontalAccuracy + verticalAccuracy) / 2,
-              gps_time: moment().format('Y-MM-DD H:mm'),
+              gps_time: timestamp,
               gps_source: "gps",
               task_id: vueInstance.task.task_id,
-              task_status: 'started'
+              task_status: 'started',
             }
 
             const values = [
@@ -553,6 +754,14 @@ export default {
             ]
 
             new SQLite('offline_sync.db').then(db => {
+              db.execSQL("UPDATE tasks SET task_start = datetime('now'), task_status = 'started'")
+                .then(result => {
+                  console.warn('update task -> check in', result)
+                })
+                .catch(error => {
+                  console.error('update task -> check in', error)
+                })
+
               db.execSQL("INSERT INTO data_logs (dt_log, log_type, user_report, gps_coords, gps_accuracy, gps_time, gps_source, task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", values)
                 .then(result => {
                   console.warn('data_log', result)

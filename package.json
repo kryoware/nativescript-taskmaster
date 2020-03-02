@@ -9,6 +9,9 @@
     "templateVersion": "v2",
     "tns-ios": {
       "version": "6.3.0"
+    },
+    "tns-android": {
+      "version": "6.3.1"
     }
   },
   "dependencies": {
@@ -21,7 +24,6 @@
     "nativescript-camera": "^4.5.0",
     "nativescript-dna-deviceinfo": "^2.4.3",
     "nativescript-geolocation": "^5.1.0",
-    "nativescript-google-maps-sdk": "^2.9.1",
     "nativescript-imagepicker": "^7.1.0",
     "nativescript-material-bottomnavigationbar": "^3.1.5",
     "nativescript-material-bottomsheet": "^3.1.5",

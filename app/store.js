@@ -42,7 +42,10 @@ export default new Vuex.Store({
         let task_ = task
         
         if (task_data.task_id.indexOf('t') === 0) {
-          console.warn('offline task')
+          if (task_data.task_id === task.task_id) {
+            console.warn('offline task')
+            task_ = { ...task, ...task_data }
+          }
         } else {
           if (parseInt(task.task_id) === parseInt(task_data.task_id)) {
             console.warn('Found task')

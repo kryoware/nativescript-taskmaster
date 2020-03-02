@@ -1,7 +1,7 @@
 <template>
   <Page backgroundColor="#f5f5f5">
     <ActionBar title="" icon="" flat="true" backgroundColor="transparent">
-      <NavigationButton text="Back" icon="res://baseline_arrow_back_24" @tap="$navigateBack" />
+      <NavigationButton text="Back" icon="res://ic_action_back" @tap="$navigateBack" />
       <Label :text="!isSaved ? 'New Task' : task.task_title" fontSize="24" class="tx-bold" color="#2e7d32" textAlignment="center" width="100%"/>
     </ActionBar>
 

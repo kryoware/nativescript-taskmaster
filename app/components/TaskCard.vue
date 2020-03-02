@@ -1,5 +1,5 @@
 <template>
-  <MDCardView borderRadius="16" :backgroundColor="color" rippleColor="white">
+  <MDCardView borderRadius="16" :backgroundColor="color" :rippleColor="statusColor === 'white' ? '#2e7d32' : 'white'">
     <StackLayout padding="16">
 
       <FlexboxLayout justifyContent="space-between" marginBottom="16">
@@ -55,7 +55,7 @@ export default {
           background = 'rgb(100, 181, 246)'
           break;
         case 'pending':
-          background = ''
+          background = 'white'
           break;
         case 'started':
           background = 'rgb(102, 207, 132)'

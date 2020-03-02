@@ -108,7 +108,7 @@ Vue.prototype.$callApi = (action, method, extras, headers) => {
 }
 // Helpers
 
-Vue.registerElement('MapView', () => require('nativescript-google-maps-sdk').MapView)
+// Vue.registerElement('MapView', () => require('nativescript-google-maps-sdk').MapView)
 
 // Prints Vue logs when --env.production is *NOT* set while building
 Vue.config.silent = (TNS_ENV === 'production')
