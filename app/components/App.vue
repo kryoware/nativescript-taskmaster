@@ -160,7 +160,7 @@
           </StackLayout>
         </StackLayout>
 
-        <MDBottomNavigationBar
+        <!-- <MDBottomNavigationBar
           class="paper-tp"
           row="1"
           activeColor="#2e7d32"
@@ -169,7 +169,7 @@
           @tabSelected="tabSelected">
           <MDBottomNavigationTab title="Tasks" icon="ic_task" />
           <MDBottomNavigationTab title="Debug" icon="ic_info" />
-        </MDBottomNavigationBar>
+        </MDBottomNavigationBar> -->
 
       </GridLayout>
     </StackLayout>
@@ -225,7 +225,8 @@ export default {
       isFirstRun: false,
       foregroundTracking: null,
 
-      apiUrl: 'http://dev.teaconcepts.net/WorkForce',
+      // apiUrl: 'http://dev.teaconcepts.net/WorkForce',
+      apiUrl: 'http://192.168.254.102:8000/api/WorkForce',
       accountCode: 'dev',
       deviceCode: 'dev',
       apiKey: 'dev',
@@ -395,6 +396,12 @@ export default {
       'setConnected',
       'setTaskTimestamp',
     ]),
+
+    uploadTaskUpdates(db, limit) {
+      const vueInstance = this
+
+      return db.all('SELECT * FROM data_logs WHERE status = "pending" LIMIT '.concat(limit))
+    },
 
     async saveTasks(tasks) {
       this.addLog('saveTasks')
@@ -570,7 +577,6 @@ export default {
         })
     },
     initGpsLogging() {
-      return
       const vueInstance = this
 
       vueInstance.gpsLogIntervalId = setInterval(vueInstance.logGPS, vueInstance.config.int_gps * 1000)
@@ -626,7 +632,7 @@ export default {
             this.addError("[SQLITE] CREATE GPS LOGS TABLE: ", error)
           })
 
-        db.execSQL("CREATE TABLE IF NOT EXISTS data_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, dt_log VARCHAR(500), log_type VARCHAR(500), user_report VARCHAR(500), gps_coords VARCHAR(500), gps_accuracy VARCHAR(500), gps_time VARCHAR(500), gps_source VARCHAR(500), task_id VARCHAR(20))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS data_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, dt_log VARCHAR(500), log_type VARCHAR(500), user_report VARCHAR(500), gps_coords VARCHAR(500), gps_accuracy VARCHAR(500), gps_time VARCHAR(500), gps_source VARCHAR(500), task_id VARCHAR(20), status VARCHAR(25) DEFAULT 'pending', gps_alt VARCHAR(500))")
           .then(result => {
           },
           error => {
@@ -703,8 +709,8 @@ export default {
       fetch(apiUrl.concat('/engine/api.php?' + params))
         .then(res => {
           if (res.status === 200) {
+            this.$hideLoader()
             res.json().then(data => {
-              this.$hideLoader()
               if (data.data) {
                 try {
                   this.addLog('[APP] Save Config')
@@ -746,6 +752,7 @@ export default {
           }
         })
         .catch(error => {
+          this.$hideLoader()
           alert('Cannot connect to API')
           this.addError(error)
         })
@@ -823,32 +830,119 @@ export default {
       }
     },
     async uploadLocalTasks() {
-      this.addLog('[APP] uploadData: ', this.isUploadingData)
+      console.warn('[APP] uploadData: ', this.isUploadingData)
+      const vueInstance = this
 
       if (this.isUploadingData) return
+
+      this.isUploadingData = true
+      
+      let limit =  50 // default
+      if (this.config != null) {
+        limit = this.config.hasOwnProperty('data_batch_upload') ? this.config.data_batch_upload : limit
+      }
       
       new SQLite('offline_sync.db')
         .then(db => {
-          // Task Logs
+        // Task Logs
 
           // Temp/Offline Tasks
-          db.all('SELECT * FROM tasks WHERE task_id LIKE "%t%"')
+          db.all('SELECT * FROM tasks WHERE task_id LIKE "%t%" LIMIT '.concat(limit))
             .then(result => {
+              let taskUpdates = null
+
+              // No Local Tasks -- Upload Task updates instead
               if (result.length > 0) {
+                taskUpdates = vueInstance.uploadTaskUpdates(db, limit)
+              } else {
                 try {
                   result.forEach(row => {
-                    this.addLog({ row })
+                    console.warn({ row })
                   })
+
+                  taskUpdates = vueInstance.uploadTaskUpdates(db, limit - result.length)
                 } catch (error) {
-                  this.addError('DATA UPLOAD')
+                  console.error('DATA UPLOAD', error)
                 }
+              }
+
+              if (taskUpdates != null) {
+                taskUpdates.then(result => {
+                  if (result.length > 0) {
+                    try {
+                      let rowsToTag = []
+                      let data_json = {}
+
+                      result.forEach((row, index) => {
+                        // Store row ID, set to uploaded after successful upload
+                        rowsToTag.push(row[0])
+
+                        const task = this.tasks.filter(t => {
+                          return parseInt(t.task_id) === parseInt(row[8])
+                        })[0]
+
+                        console.warn({ row })
+                        console.warn({ task })
+
+                        data_json[''.concat(index + 1)] = {
+                          dt_log: row[1],
+                          log_type: row[2],
+                          user_report: row[3],
+                          gps_coords: row[4],
+                          gps_accuracy: row[5],
+                          gps_time: row[6],
+                          gps_source: row[7],
+                          gps_alt: row[10],
+                          task_id: row[8],
+                          task_tag: task.task_tag,
+                          task_title: task.task_title,
+                          task_des: task.task_des,
+                          instructions: task.instructions,
+                          notes: task.notes,
+                          location: task.location,
+                          customer: task.customer,
+                        }
+                      })
+
+                      vueInstance.$callApi('upload_data', 'post', { data_json }, null)
+                        .then(body => {
+                          // Set to uploaded
+                          const query = "UPDATE data_logs SET status = 'done' WHERE id in (".concat(rowsToTag.join(','), ")")
+          
+                          new SQLite('offline_sync.db')
+                            .then(db => {
+                              db.execSQL(query)
+                                .then(result => {
+                                  console.warn("TAG DATA DONE", result)
+
+                                  this.isUploadingData = false
+                                })
+                                .catch(error => {
+                                  console.error("TAG DATA DONE", error)
+
+                                  this.isUploadingData = false
+                                })
+                            },
+                            error => console.error("[SQLITE] CONNECT: ", error))
+                        })
+                        .catch(error => {
+                          console.error('DATA UPLOAD', error)
+                        })
+                      } catch (error) {
+                        console.error('DATA LOGS', error)
+                      }
+                    }
+                  })
+                  .catch(error => {
+                    console.error('DATA UPLOAD QUERY', error)
+                  })
               }
             })
             .catch(error => {
-              this.addError('DATA UPLOAD QUERY', error)
+              console.error('DATA UPLOAD QUERY', error)
             })
         },
-        error => this.addError("[SQLITE] CONNECT: ", error))
+        error => console.error("[SQLITE] CONNECT: ", error))
     },
     async uploadLocalFiles() {
       this.addLog('[APP] uploadFiles: ', this.isUploadingFiles)
@@ -952,7 +1046,7 @@ export default {
                       })
                     })
                   } catch (error) {
-                    this.addError('file upload attempt', error)
+                    console.error('file upload attempt', error)
                   }
                 }
               })

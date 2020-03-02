@@ -99,6 +99,7 @@ export default {
   data() {
     return {
       selfie: null,
+      gps_alt: '',
       gps_time: '',
       gps_coords: '',
       gps_accuracy: '',
@@ -123,9 +124,23 @@ export default {
 
         }
 
+        let img_max_width_px = 800
+          
+        if (this.config && this.config.hasOwnProperty('img_max_width_px')) {
+          img_max_width_px = parseInt(this.config.img_max_width_px)
+        }
+
         // Should come from config
         const format = image.substr(image.indexOf('.') + 1)
         const quality = parseInt(vueInstance.config.jpeg_quality)
+        
+        console.warn(Object.keys(e))
+        console.warn(e.orientation)
+        // e.options = {
+        //   width: img_max_width_px / this.$screen.scale,
+        //   height: img_max_width_px / this.$screen.scale,
+        // 
+        // }
 
         console.warn('SelfieModal', { quality })
 
@@ -211,11 +226,13 @@ export default {
                 timestamp,
                 latitude,
                 longitude,
+                altitude
               } = loc
               
               vueInstance.gps_coords = `${latitude},${longitude}`
               vueInstance.gps_accuracy = (horizontalAccuracy + verticalAccuracy) / 2
               vueInstance.gps_time = timestamp
+              vueInstance.gps_alt = altitude
           } catch (error) {
             console.error(error)
           }
@@ -231,6 +248,7 @@ export default {
     onConfirmTap() {
       const {
         selfie,
+        gps_alt,
         gps_time,
         gps_coords,
         gps_accuracy,
@@ -245,26 +263,29 @@ export default {
       console.warn('SelfieModal', {
         gps_req_check_in,
         photo_req_check_in,
+        selfie,
+        gps_coords,
+        gps_time,
+        gps_accuracy,
+        gps_alt,
       })
 
-      if (parseInt(photo_req_check_in) === 0 && selfie === null) {
+      if (parseInt(photo_req_check_in) === 1 && selfie === null) {
         return
       }
 
-      if (parseInt(gps_req_check_in) === 0 && (gps_time === '' || gps_coords === '' || gps_accuracy === '')) {
+      if (parseInt(gps_req_check_in) === 1 && (gps_time === '' || gps_coords === '' || gps_accuracy === '' || gps_alt === '')) {
         return
       }
 
       console.warn({
         selfie,
-        gps_time,
         gps_coords,
+        gps_time,
         gps_accuracy,
-        user_report,
+        gps_alt,
       })
-      // let gps_coords = ''
-      // let user_report = ''
-      // let selfie = ''
+      
       // this.$modal.close({
       //   gps_coords,
 

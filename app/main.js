@@ -90,6 +90,10 @@ Vue.prototype.$callApi = (action, method, extras, headers) => {
     options = { ...options, ...{ headers } }
   }
 
+  if (method === 'post' && extras != null) {
+    options = { ...options, ...{ body: JSON.stringify(extras) } }
+  }
+
   if (action != 'statcheck') {
     Sentry.captureMessage('[API]', {
       level: Level.Debug,

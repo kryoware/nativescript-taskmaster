@@ -3,6 +3,7 @@
     <ActionBar title="" icon="" flat="true" backgroundColor="transparent">
       <NavigationButton text="Back" icon="res://baseline_arrow_back_24" @tap="$navigateBack" />
       <Label text="Task Details" fontSize="24" class="tx-bold" color="#2e7d32" textAlignment="center" width="100%"/>
+      <ActionItem icon="" text="Save" ios.position="right" @tap="onSaveChangesTap" isEn/>
     </ActionBar>
 
     <StackLayout>
@@ -11,7 +12,7 @@
           <!-- Task Details -->
           <StackLayout padding="16 32 24 32">
             <Label
-              :text="task.task_title"
+              :text="task_.task_title"
               color="#2e7d32"
               marginBottom="16"
               class="tx-bold"
@@ -19,7 +20,7 @@
               textWrap="true"
               />
             <Label
-              :text="task.customer"
+              :text="task_.customer"
               color="#2e7d32"
               class="tx-regular"
               fontSize="18"
@@ -33,7 +34,7 @@
               hint="Instructions"
               @loaded="initMultiline"
 
-              :text="task.instructions"
+              :text="task_.instructions"
               errorEnabled="true"
               floating="true"
 
@@ -53,7 +54,7 @@
               hint="Address"
               @loaded="initMultiline"
 
-              :text="task.location"
+              :text="task_.location"
               errorEnabled="true"
               floating="true"
 
@@ -73,7 +74,7 @@
               hint="Notes"
               @loaded="initMultiline"
 
-              :text="task.notes"
+              :text="task_.notes"
               errorEnabled="true"
               floating="true"
 
@@ -208,7 +209,18 @@ export default {
   computed: {
     ...mapState({
       user: state => state.user
-    })
+    }),
+    isModified() {
+      let original = Object.values(this.task)
+      let modified = Object.values(this.task_)
+
+      // FIXME: Remove debugging
+      let diff = original.filter(value => !modified.includes(value)).length
+      console.warn({ diff })
+
+      return diff > 0
+      // FIXME: Remove debugging
+    }
   },
   data() {
     return {
@@ -222,6 +234,7 @@ export default {
   },
   mounted() {
     const vueInstance = this
+    vueInstance.task_ = Object.assign({}, this.task)
 
     new SQLite('offline_sync.db').then(db => {
       db.all('SELECT dt_log, log_type, user_report, gps_coords, gps_accuracy, gps_time, gps_source, task_id FROM data_logs WHERE task_id = ?', this.task.task_id)
@@ -249,34 +262,21 @@ export default {
 
       db.all(`SELECT filename FROM files WHERE status IN ('pending','done') AND task_id = ?`, [ this.task.task_id ])
         .then(result => {
-          console.warn('[SQLITE] Task Photos', result)
-          // [
-          //   [2, /data/user/0/org.nativescript.application/files/1_11_pic_1.png, 11],
-          //   [3, /data/user/0/org.nativescript.application/files/1_11_pic_1.txt, 11]
-          // ]
+          console.warn('[SQLITE] Task Photos Query', result)
 
           result.forEach(file => {
             let filename = file[0]
             let extension = filename.substr(filename.lastIndexOf('.') + 1)
 
-            console.warn({
-              filename,
-              extension
-            })
-
             switch (extension) {
               case 'txt':
-                // get file content
                 try {
                   const fileName = filename.substr(filename.lastIndexOf('/') + 1)
-                  console.warn({ fileName })
                   const folder = fs.knownFolders.documents()
                   const file = folder.getFile(fileName)
 
                   file.readText()
                     .then(text => {
-                      console.warn('readText', text)
-
                       this.imageLabels.push({
                         label: text,
                         saved: true
@@ -305,6 +305,26 @@ export default {
   },
   methods: {
     ...mapActions(['setTaskStatus', 'updateTask']),
+    onSaveChangesTap(args) {
+      if (this.isModified) {
+        console.warn(this.task_)
+      // const values = [
+
+      // ]
+
+      // new SQLite('offline_sync.db').then(db => {
+      //   db.execSQL("", values)
+      //     .then(result => {
+      //       console.warn('data_log', result)
+      //       console.warn(vueInstance.task_)
+      //       vueInstance.updateTask(vueInstance.task_)
+      //     })
+      //     .catch(error => {
+      //       console.error('Check In SQL INSERT', error)
+      //     })
+
+      }
+    },
     onPauseTap(args) {
       // alert('TODO')
       this.$showModal(SelfieModalVue, {
@@ -435,6 +455,7 @@ export default {
               timestamp,
               latitude,
               longitude,
+              altitude
             } = loc
 
             vueInstance.task_ = {
@@ -445,8 +466,9 @@ export default {
               gps_accuracy: (horizontalAccuracy + verticalAccuracy) / 2,
               gps_time: moment().format('Y-MM-DD H:mm'),
               gps_source: "gps",
+              gps_alt: altitude,
               task_id: vueInstance.task.task_id,
-              task_status: 'done'
+              task_status: 'done',
             }
 
             const values = [
@@ -458,10 +480,11 @@ export default {
               vueInstance.task_.gps_time,
               vueInstance.task_.gps_source,
               vueInstance.task_.task_id,
+              vueInstance.task_.gps_alt,
             ]
 
             new SQLite('offline_sync.db').then(db => {
-              db.execSQL("INSERT INTO data_logs (dt_log, log_type, user_report, gps_coords, gps_accuracy, gps_time, gps_source, task_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)", values)
+              db.execSQL("INSERT INTO data_logs (dt_log, log_type, user_report, gps_coords, gps_accuracy, gps_time, gps_source, task_id, gps_alt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)", values)
                 .then(result => {
                   console.warn('data_log', result)
                   console.warn(vueInstance.task_)

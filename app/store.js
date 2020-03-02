@@ -25,6 +25,8 @@ export default new Vuex.Store({
       state.config = config
     },
     setTasks: (state, tasks) => {
+      console.warn('--- VUEX ---')
+      console.warn(tasks[0])
       state.tasks = tasks
     },
     setTaskTimestamp: (state, dt_tasks) => {

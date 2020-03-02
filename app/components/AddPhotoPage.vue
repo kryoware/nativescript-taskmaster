@@ -297,10 +297,17 @@ export default {
         const format = image.substr(image.indexOf('.') + 1)
         const quality = parseInt(this.config.jpeg_quality)
 
+        e.options = {
+          width: 800 / this.$screen.scale,
+          height: 800 / this.$screen.scale,
+          keepAspectRatio: true
+        }
+
         try {
           ImageSource.fromAsset(e)
           .then(imageSource => {
             try {
+              console.warn('Resize: ', { width: imageSource.width, height: imageSource.height })
               const filename = `${this.user.uid}_${this.task.task_id}_pic_${this.images.length + 1}.${format}`
               const folder = fs.knownFolders.documents().path
               const filePath = fs.path.join(folder, filename)
