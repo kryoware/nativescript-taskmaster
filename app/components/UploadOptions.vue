@@ -17,7 +17,12 @@
 
 <script>
 export default {
-  props: ['closeCallback'],
+  props: {
+    closeCallback: {
+      type: Function,
+      required: true
+    },
+  },
   data() {
     return {
       items: [
@@ -34,8 +39,12 @@ export default {
   },
   methods: {
     onItemTap({ index }) {
-      this.closeCallback(index)
-      this.$closeBottomSheet(index)
+      try {
+        this.closeCallback(index)
+        this.$closeBottomSheet(index)
+      } catch (error) {
+        console.error(error)
+      }
     }
   },
 }

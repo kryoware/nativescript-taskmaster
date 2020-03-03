@@ -13,6 +13,7 @@ export default new Vuex.Store({
     user: {},
     processLog: '',
     errorLog: '',
+    permissions: []
   },
   mutations: {
     addTask: (state, task) => {
@@ -25,8 +26,6 @@ export default new Vuex.Store({
       state.config = config
     },
     setTasks: (state, tasks) => {
-      console.warn('--- VUEX ---')
-      console.warn(tasks[0])
       state.tasks = tasks
     },
     setTaskTimestamp: (state, dt_tasks) => {
@@ -39,7 +38,7 @@ export default new Vuex.Store({
       console.warn(task_data)
       console.warn('--------------------------------')
       state.tasks = state.tasks.map(task => {
-        let task_ = task
+        let task_ = Object.assign({}, task)
         
         if (task_data.task_id.indexOf('t') === 0) {
           if (task_data.task_id === task.task_id) {
@@ -66,7 +65,14 @@ export default new Vuex.Store({
     },
     addError: (state, error) => {
       state.errorLog = state.errorLog.concat(error, '\n')
-    }
+    },
+    setPermissions: (state, permissions) => {
+      console.warn('--- setPermissions --- ')
+      console.warn(state.permissions)
+      state.permissions = permissions
+      console.warn(state.permissions)
+      console.warn('--- setPermissions --- ')
+    },
   },
   actions: {
     addTask: ({ commit }, task) => {
@@ -87,8 +93,8 @@ export default new Vuex.Store({
     setUser: ({ commit }, user) => {
       commit("setUser", user)
     },
-    updateTask: ({ commit }, task_id, task_data) => {
-      commit("updateTask", task_id, task_data)
+    updateTask: ({ commit }, task_data) => {
+      commit("updateTask", task_data)
     },
     setRunning: ({ commit }, isRunning) => {
       commit("setRunning", isRunning)
@@ -126,6 +132,9 @@ export default new Vuex.Store({
       }
 
       commit("addError", string)
+    },
+    setPermissions: ({ commit }, permissions) => {
+      commit("setPermissions", permissions)
     }
   }
 });

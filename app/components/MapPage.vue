@@ -6,7 +6,6 @@
       :zoom="zoom"
       :latitude="origin.latitude"
       :longitude="origin.longitude"
-      v-if="allowExecution"
       @mapReady="mapReady"
     />
   </Page>
@@ -24,22 +23,10 @@ export default {
       origin: { latitude: 0, longitude: 0 },
       destination: { latitude: 0, longitude: 0 },
       journeyDetails: "Journey: Not started yet!",
-      allowExecution: false,
       journeyStarted: false,
       mapView: null,
       zoom: 17,
     }
-  },
-  created() {
-    let permissionsNeeded = [
-      android.Manifest.permission.ACCESS_FINE_LOCATION,
-      android.Manifest.permission.ACCESS_COARSE_LOCATION
-    ]
-
-    permissions
-      .requestPermissions(permissionsNeeded)
-      .then(() => this.allowExecution = true)
-      .catch(() => this.allowExecution = false)
   },
   methods: {
     mapReady(args) {
@@ -48,6 +35,7 @@ export default {
       const that = this
 
       geolocation.enableLocationRequest(true, true).then(() => {
+        console.warn('mapReady')
         geolocation.getCurrentLocation({
           desiredAccuracy: Accuracy.high,
           maximumAge: 5000,

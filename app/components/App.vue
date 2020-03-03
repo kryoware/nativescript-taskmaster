@@ -212,6 +212,8 @@ const nsHttp = require('nativescript-background-http')
 const fileUploadSession = nsHttp.session('file-upload')
 const dataUploadSession = nsHttp.session('data-upload')
 
+const DEBUG = false
+
 export default {
   components: {
     TaskCard,
@@ -225,8 +227,7 @@ export default {
       isFirstRun: false,
       foregroundTracking: null,
 
-      // apiUrl: 'http://dev.teaconcepts.net/WorkForce',
-      apiUrl: 'http://192.168.254.102:8000/api/WorkForce',
+      apiUrl: DEBUG ? 'http://192.168.254.100:8000/api/WorkForce' : 'http://dev.teaconcepts.net/WorkForce',
       accountCode: 'dev',
       deviceCode: 'dev',
       apiKey: 'dev',
@@ -263,6 +264,7 @@ export default {
       config: state => state.config,
       dt_tasks: state => state.dt_tasks,
       dt_config: state => state.dt_config,
+      permissions: state => state.permissions,
     }),
     sortedTasks() {
       if (this.tasks.length === 0) return this.tasks
@@ -286,6 +288,7 @@ export default {
     clearInterval(this.gpsLogIntervalId)
   },
   mounted() {
+    this.requestPermissions()
     this.initSQL()
     this.initObserver()
 
@@ -407,12 +410,119 @@ export default {
       'setConfig',
       'setConnected',
       'setTaskTimestamp',
+      'setPermissions'
     ]),
 
-    uploadTaskUpdates(db, limit) {
+    requestPermissions() {
+      permissions.requestPermission([
+        android.Manifest.permission.INTERNET,
+        android.Manifest.permission.CAMERA,
+        android.Manifest.permission.ACCESS_FINE_LOCATION,
+        android.Manifest.permission.ACCESS_COARSE_LOCATION,
+        android.Manifest.permission.READ_EXTERNAL_STORAGE,
+        android.Manifest.permission.WRITE_EXTERNAL_STORAGE,
+      ])
+      .then(result => {
+        console.warn('requestPermissions', result)
+        this.setPermissions(result)
+      })
+      .catch(error => {
+        console.error('requestPermissions', error)
+      })
+    },
+
+    uploadTaskUpdates(limit) {
       const vueInstance = this
 
-      return db.all('SELECT * FROM data_logs WHERE status = "pending" LIMIT '.concat(limit))
+      new SQLite('offline_sync.db')
+        .then(db => {
+          db.all('SELECT * FROM data_logs WHERE status = "pending" LIMIT '.concat(limit))
+            .then(result => {
+              if (result.length > 0) {
+                try {
+                  let rowsToTag = []
+                  let tasksToUpdate = []
+                  let data_json = {}
+
+                  result.forEach((row, index) => {
+                    // Store row ID, set to uploaded after successful upload
+                    rowsToTag.push(row[0])
+
+                    const task = this.tasks.filter(t => {
+                      if (''.concat(t.task_id).indexOf('t') === 0) {
+                        return t.task_id === row[8]
+                      } else {
+                        return parseInt(t.task_id) === parseInt(row[8])
+                      }
+                    })[0]
+
+                    data_json[''.concat(index + 1)] = {
+                      dt_log: row[1],
+                      log_type: row[2],
+                      user_report: row[3],
+                      gps_coords: row[4],
+                      gps_accuracy: row[5],
+                      gps_time: row[6],
+                      gps_source: row[7],
+                      gps_alt: row[10],
+                      task_id: ''.concat(row[8]).indexOf('t') == -1 ? row[8] : '',
+                      task_tag: task.task_tag,
+                      task_title: task.task_title,
+                      task_des: task.task_des,
+                      instructions: task.instructions,
+                      notes: task.notes,
+                      location: task.location,
+                      customer: task.customer,
+                    }
+                  })
+
+                  const payload = { data_json }
+
+                  console.warn(payload)
+
+                  vueInstance.$callApi('upload_data', 'post', payload, null)
+                    .then(body => {
+                      console.warn(body)
+                      console.warn(typeof body)
+                      console.warn(Object.keys(body))
+
+                      // Set to uploaded
+                      const query = "UPDATE data_logs SET status = 'done' WHERE id in (".concat(rowsToTag.join(','), ")")
+
+                      new SQLite('offline_sync.db')
+                        .then(db => {
+                          console.warn('UPDATE LOCAL TASK(S) WITH SERVER TASK(S)')
+                          // db.execSQL("")
+
+                          db.execSQL(query)
+                            .then(result => {
+                              console.warn("TAG DATA DONE", result)
+
+                              this.isUploadingData = false
+                            })
+                            .catch(error => {
+                              console.error("TAG DATA DONE", error)
+
+                              this.isUploadingData = false
+                            })
+                        },
+                        error => console.error("[SQLITE] CONNECT: ", error))
+                    })
+                    .catch(error => {
+                      console.error('DATA UPLOAD', error)
+                      
+                      this.isUploadingData = false
+                    })
+                } catch (error) {
+                  console.error('DATA LOGS', error)
+                }
+              } else this.isUploadingData = false
+            })
+            .catch(error => {
+              console.error('DATA UPLOAD QUERY', error)
+            })
+        },
+        error => console.error("[SQLITE] CONNECT: ", error))
     },
 
     async saveTasks(tasks) {
@@ -506,11 +616,12 @@ export default {
               data.forEach(gps_log => {
                 const timestamp = moment(gps_log[1]).format('x').toString()
                 const coords = `${gps_log[2]},${gps_log[3]}`
-                const line = `${timestamp} | ${coords}\n`
+                const line = `${timestamp} | ${coords} | ${gps_log[4]} | ${gps_log[5]} | ${gps_log[6]}\n`
                 rowsToDelete.push(parseInt(gps_log[0]))
 
                 content = content.concat(line)
               })
+
               file.writeText(content)
                 .then(() => {
                   const url = this.$appSettings.getString('url')
@@ -542,7 +653,7 @@ export default {
 
                   task.on('progress', e => {})
                   task.on('responded', e => {
-                    console.warn('GPS UPLOAD RESPONDED', e)
+                    // console.warn('GPS UPLOAD RESPONDED', e)
                   })
 
                   task.on('complete', e => {
@@ -553,15 +664,21 @@ export default {
                       )
                     )
                     .then(result => {
-                      console.warn('DELETE UPLOADED LOGS', result)
+                      // console.warn('DELETE UPLOADED LOGS', result)
                     })
                     .catch(error => {
                       console.error('DELETE UPLOADED LOGS', error)
+                      Sentry.captureMessage('DELETE UPLOADED LOGS', {
+                        level: Level.Error,
+                        extra: {
+                          error
+                        }
+                      })
                     })
                   })
 
                   task.on('error', e => {
-                    console.error('GPS LOG UPLOAD - FAILED', e)
+                    // console.error('GPS LOG UPLOAD - FAILED', e)
                     Sentry.captureMessage('GPS LOG UPLOAD - FAILED', {
                       level: Level.Error,
                       extra: {
@@ -571,7 +688,7 @@ export default {
                   })
 
                   task.on('cancelled', e => {
-                    console.warn('GPS LOG UPLOAD - CANCELLED')
+                    // console.warn('GPS LOG UPLOAD - CANCELLED')
                     Sentry.captureMessage('GPS LOG UPLOAD - CANCELLED', {
                       level: Level.Debug
                     })
@@ -638,7 +755,7 @@ export default {
         console.warn("[SQLITE] CONNECTED")
         vueInstance.database = db
 
-        db.execSQL("CREATE TABLE IF NOT EXISTS gps_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp VARCHAR(500), latitude VARCHAR(500), longitude VARCHAR(500))")
+        db.execSQL("CREATE TABLE IF NOT EXISTS gps_logs (id INTEGER PRIMARY KEY AUTOINCREMENT, timestamp VARCHAR(500), latitude VARCHAR(500), longitude VARCHAR(500), accuracy VARCHAR(30), altitude VARCHAR(30), source VARCHAR(20) )")
           .then(result => {
           },
           error => {
@@ -804,6 +921,7 @@ export default {
       this.intervals.forEach(intervalId => clearInterval(intervalId))
     },
     async statCheck() {
+      return
       console.warn('[APP] statCheck')
       const vueInstance = this
 
@@ -880,108 +998,8 @@ export default {
       if (this.config != null) {
         limit = this.config.hasOwnProperty('data_batch_upload') ? this.config.data_batch_upload : limit
       }
-      
-      new SQLite('offline_sync.db')
-        .then(db => {
-        // Task Logs
 
-          // Temp/Offline Tasks
-          db.all('SELECT * FROM tasks WHERE task_id LIKE "%t%" AND status = "pending" LIMIT '.concat(limit))
-            .then(result => {
-              let taskUpdates = null
-
-              // No Local Tasks -- Upload Task updates instead
-              if (result.length > 0) {
-                taskUpdates = vueInstance.uploadTaskUpdates(db, limit)
-              } else {
-                try {
-                  result.forEach(row => {
-                    console.warn({ row })
-                  })
-
-                  taskUpdates = vueInstance.uploadTaskUpdates(db, limit - result.length)
-                } catch (error) {
-                  console.error('DATA UPLOAD', error)
-                }
-              }
-
-              if (taskUpdates != null) {
-                taskUpdates.then(result => {
-                  if (result.length > 0) {
-                    try {
-                      let rowsToTag = []
-                      let data_json = {}
-
-                      result.forEach((row, index) => {
-                        // Store row ID, set to uploaded after successful upload
-                        rowsToTag.push(row[0])
-
-                        const task = this.tasks.filter(t => {
-                          return parseInt(t.task_id) === parseInt(row[8])
-                        })[0]
-
-                        console.warn({ row })
-                        console.warn({ task })
-
-                        data_json[''.concat(index + 1)] = {
-                          dt_log: row[1],
-                          log_type: row[2],
-                          user_report: row[3],
-                          gps_coords: row[4],
-                          gps_accuracy: row[5],
-                          gps_time: row[6],
-                          gps_source: row[7],
-                          gps_alt: row[10],
-                          task_id: row[8],
-                          task_tag: task.task_tag,
-                          task_title: task.task_title,
-                          task_des: task.task_des,
-                          instructions: task.instructions,
-                          notes: task.notes,
-                          location: task.location,
-                          customer: task.customer,
-                        }
-                      })
-
-                      vueInstance.$callApi('upload_data', 'post', { data_json }, null)
-                        .then(body => {
-                          // Set to uploaded
-                          const query = "UPDATE data_logs SET status = 'done' WHERE id in (".concat(rowsToTag.join(','), ")")
-          
-                          new SQLite('offline_sync.db')
-                            .then(db => {
-                              db.execSQL(query)
-                                .then(result => {
-                                  console.warn("TAG DATA DONE", result)
-
-                                  this.isUploadingData = false
-                                })
-                                .catch(error => {
-                                  console.error("TAG DATA DONE", error)
-
-                                  this.isUploadingData = false
-                                })
-                            },
-                            error => console.error("[SQLITE] CONNECT: ", error))
-                        })
-                        .catch(error => {
-                          console.error('DATA UPLOAD', error)
-                        })
-                      } catch (error) {
-                        console.error('DATA LOGS', error)
-                      }
-                    }
-                  })
-                  .catch(error => {
-                    console.error('DATA UPLOAD QUERY', error)
-                  })
-              }
-            })
-            .catch(error => {
-              console.error('DATA UPLOAD QUERY', error)
-            })
-        },
-        error => console.error("[SQLITE] CONNECT: ", error))
+      this.uploadTaskUpdates(limit)
     },
     async uploadLocalFiles() {
       console.warn('[APP] uploadFiles: ', this.isUploadingFiles)
@@ -1087,6 +1105,8 @@ export default {
                   } catch (error) {
                     console.error('file upload attempt', error)
                   }
+                } else {
+                  console.warn('[APP] uploadFiles: ', 'NO PENDING FILES')
                 }
               })
               .catch(error => {
@@ -1122,16 +1142,32 @@ export default {
                 timestamp,
                 latitude,
                 longitude,
+                altitude,
               } = loc
 
               if (horizontalAccuracy <= parseInt(vueInstance.config.gps_min_accuracy) &&
                 verticalAccuracy <= parseInt(vueInstance.config.gps_min_accuracy)) {
-                vueInstance.database.execSQL(
-                    'INSERT INTO gps_logs (timestamp, latitude, longitude) VALUES (?, ?, ?)',
-                    [ loc.timestamp, loc.latitude, loc.longitude ]
+                vueInstance.database
+                  .execSQL(`
+                    INSERT INTO gps_logs (
+                      timestamp,
+                      latitude,
+                      longitude,
+                      accuracy,
+                      altitude,
+                      source
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                  `, [
+                      loc.timestamp,
+                      loc.latitude,
+                      loc.longitude,
+                      (horizontalAccuracy + verticalAccuracy) / 2,
+                      altitude,
+                      'gps'
+                    ]
                   )
                   .then(id => {
-                    // console.warn('[+GPS] Logged location id: '.concat(id))
+                    console.warn('[+GPS] Logged location')
                   })
                   .catch(error => console.error('[+GPS] ', error))
               }

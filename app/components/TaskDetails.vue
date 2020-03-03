@@ -524,11 +524,22 @@ export default {
       // })
     },
     onViewMapTap(args) {
-      // this.$navigateTo(MapPage, {
-      //   transition: {
-      //     name: 'slideTop'
-      //   }
-      // })
+      try {
+        console.warn(this.task)
+        const { gps_coords } = this.task
+        console.warn(gps_coords)
+
+        this.$navigateTo(MapPage, {
+          props: {
+            gps_coords
+          },
+          transition: {
+            name: 'slideTop'
+          }
+        })
+      } catch (error) {
+        console.error(error)
+      }
     },
     onAddPhotoTap(args) {
       const vueInstance = this

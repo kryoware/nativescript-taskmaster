@@ -83,14 +83,14 @@ Vue.prototype.$callApi = (action, method, extras, headers) => {
     'ac='.concat(encodeURI(ac)),
     'dc='.concat(encodeURI(dc)),
   ]
-  .concat(extras)
-  .join('&')
+  params = (Array.isArray(extras) ? params.concat(extras) : params).join('&')
 
   if (headers != null) {
     options = { ...options, ...{ headers } }
   }
 
-  if (method === 'post' && extras != null) {
+  if (method === 'post' && (extras != null)) {
+    console.warn(extras)
     options = { ...options, ...{ body: JSON.stringify(extras) } }
   }
 
@@ -108,7 +108,10 @@ Vue.prototype.$callApi = (action, method, extras, headers) => {
 }
 // Helpers
 
-// Vue.registerElement('MapView', () => require('nativescript-google-maps-sdk').MapView)
+if (platform.isIOS)
+  GMSServices.provideAPIKey("PUT_API_KEY_HERE")
+
+Vue.registerElement('MapView', () => require('nativescript-google-maps-sdk').MapView)
 
 // Prints Vue logs when --env.production is *NOT* set while building
 Vue.config.silent = (TNS_ENV === 'production')
