@@ -340,47 +340,48 @@ export default {
                   console.error('[APP] Files', error)
                 })
 
-              //  JOIN data_logs ON tasks.task_id = data_logs.task_id
               db.all("SELECT * FROM tasks")
                 .then(result => {
-                  console.warn('[APP] Total Tasks: ' + result.length)
-          
-                  let localTasks = []
+                  if (result.length >= 0) {
+                    console.warn('[APP] Total Tasks: ' + result.length)
+            
+                    let localTasks = []
 
-                  result.forEach(row => {
-                    try {
-                      const task = {
-                        id: row[0],
-                        schedule: row[1],
-                        task_start: row[2],
-                        task_end: row[3],
-                        task_status: row[4],
-                        task_time_allocated: row[5],
-                        assigned_to: row[6],
-                        customer: row[7],
-                        task_id: row[8],
-                        uid: row[9],
-                        task_tag: row[10],
-                        task_title: row[11],
-                        task_des: row[12],
-                        instructions: row[13],
-                        notes: row[14],
-                        location: row[15],
-                        gps_coords: row[16],
-                        sched_day: row[17],
-                        sched_time: row[18]
+                    result.forEach(row => {
+                      try {
+                        const task = {
+                          id: row[0],
+                          schedule: row[1],
+                          task_start: row[2],
+                          task_end: row[3],
+                          task_status: row[4],
+                          task_time_allocated: row[5],
+                          assigned_to: row[6],
+                          customer: row[7],
+                          task_id: row[8],
+                          uid: row[9],
+                          task_tag: row[10],
+                          task_title: row[11],
+                          task_des: row[12],
+                          instructions: row[13],
+                          notes: row[14],
+                          location: row[15],
+                          gps_coords: row[16],
+                          sched_day: row[17],
+                          sched_time: row[18]
+                        }
+
+                        localTasks.push(task)
+                      } catch (error) {
+                        console.error('[SQLITE] Convert to VUEX Task', error)
                       }
+                    })
+                    
+                    console.warn('[APP] Temporary Tasks')
+                    console.warn({ localTasks: localTasks.filter(task => task.task_id.indexOf('t') != -1) })
 
-                      localTasks.push(task)
-                    } catch (error) {
-                      console.error('[SQLITE] Convert to VUEX Task', error)
-                    }
-                  })
-                  
-                  console.warn('[APP] Temporary Tasks')
-                  console.warn({ localTasks: localTasks.filter(task => task.task_id.indexOf('t') != -1) })
-
-                  vueInstance.setTasks(localTasks)
+                    vueInstance.setTasks(localTasks)
+                  }
                 })
                 .catch(error => {
                   console.error('[SQLITE] Get Tasks: ', error)
@@ -657,7 +658,6 @@ export default {
                   })
 
                   task.on('complete', e => {
-                    console.warn('GPS UPLOAD COMPLETE', e)
                     vueInstance.database.execSQL('DELETE FROM gps_logs WHERE id IN ('.concat(
                         rowsToDelete.join(','),
                         ')'
@@ -797,33 +797,20 @@ export default {
       })
     },
     onTest() {
-      try {
-        geolocation.enableLocationRequest(true, true)
-        .then(() => {
-          console.warn('test')
-          try {
-            geolocation.getCurrentLocation({
-              desiredAccuracy: Accuracy.high,
-              maximumAge: 5000,
-            })
-            .then(function (loc) {
-              console.warn('onTest', loc)
-            }, function (e) {
-              console.error(e)
-            })
-          } catch (error) {
-            console.error('onTest logging')
-          }
-        },
-        (e) => {
-          console.error('asdsad: ' + (e.message || e))
-        })
-        .catch(ex => {
-          console.error('Unable to Enable Location', ex)
-        })
-      } catch (error) {
-        console.error('onTest logging')
-      }
+      action("Action", [
+        'check_in',
+        'check_out'
+      ])
+      .then(action => {
+        console.warn(action)
+      })
+      // this.$showModal(SelfieModal, {
+
+      // })
+      // .then(result => {
+      //   console.warn('selfieModal', result)
+      // })
+      // .catch(error => console.error(error))
     },
     saveConfig() {
       this.$showLoader()

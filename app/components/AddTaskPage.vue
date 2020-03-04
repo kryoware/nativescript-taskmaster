@@ -334,7 +334,7 @@ export default {
         customer: this.task.customer,
         task_id: "t".concat(this.temp_task_id),
         uid: this.user.uid,
-        task_tag: "", // FIXME: task_tag
+        task_tag: this.temp_task_id, // FIXME: task_tag
         task_title: this.task.task_title,
         task_des: "", // FIXME: task_des
         instructions: this.task.instructions,
