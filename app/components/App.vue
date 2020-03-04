@@ -205,6 +205,7 @@ import TaskDetails from './TaskDetails'
 import AddTaskPage from './AddTaskPage'
 import StatusPage from './StatusPage'
 import TaskCard from './TaskCard'
+import SelfieModal from './SelfieModal'
 
 const SQLite = require('nativescript-sqlite')
 const db = new SQLite('offline_sync.db')
@@ -602,10 +603,10 @@ export default {
           error => console.error("[SQLITE] CONNECT: ", error))
       }
 
-      vueInstance.database.all("SELECT * FROM gps_logs")
+      vueInstance.database.all("SELECT * FROM gps_logs LIMIT 200")
         .then(data => {
           try {
-            if (data.length) {
+            if (data.length === 200) {
               const filename = `${this.user.uid}_${moment().format('Y-M-D')}.glog`
 
               const path = android.os.Environment.getExternalStorageDirectory().toString()
@@ -731,7 +732,6 @@ export default {
 
             if (this.$appSettings.hasKey('url')) {
               this.startProcessing()
-              this.attemptGpsLogUpload()
             } else {
               console.warn('[NETWORK] Invalid API URL')
             }
@@ -797,20 +797,6 @@ export default {
       })
     },
     onTest() {
-      action("Action", [
-        'check_in',
-        'check_out'
-      ])
-      .then(action => {
-        console.warn(action)
-      })
-      // this.$showModal(SelfieModal, {
-
-      // })
-      // .then(result => {
-      //   console.warn('selfieModal', result)
-      // })
-      // .catch(error => console.error(error))
     },
     saveConfig() {
       this.$showLoader()

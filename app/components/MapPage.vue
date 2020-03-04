@@ -17,6 +17,8 @@ import * as permissions from 'nativescript-permissions'
 import * as geolocation from 'nativescript-geolocation'
 import { Accuracy } from 'tns-core-modules/ui/enums'
 
+var mapsModule = require('nativescript-google-maps-sdk')
+
 export default {
   data() {
     return {
@@ -30,7 +32,12 @@ export default {
   },
   methods: {
     mapReady(args) {
-      this.mapView = args.object;
+      this.mapView = args.object
+      
+      var marker = new mapsModule.Marker()
+      marker.position = mapsModule.Position.positionFromLatLng(this.origin.latitude, this.origin.longitude)
+
+      this.mapView.addMarker(marker)
 
       const that = this
 

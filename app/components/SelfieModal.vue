@@ -2,11 +2,30 @@
   <Page>
     <DockLayout stretchLastChild="true" backgroundColor="#f5f5f5">
       <StackLayout dock="top">
-        <AbsoluteLayout :width="$screen.widthDIPs">
-          <StackLayout top="80" left="0" padding="88 16 16 16" :width="$screen.widthDIPs" backgroundColor="#fff" borderRadius="32" marginLeft="8" marginRight="8" marginTop="8">
+        <StackLayout>
+          <FlexboxLayout marginTop="8"
+            justifyContent="center"
+            :width="$screen.widthDIPs"
+            top="0"
+            left="0">
+            <StackLayout height="116" width="116" backgroundColor="white" borderRadius="100%">
+              <Image
+                margin="8"
+                backgroundColor="#dcdcdc"
+                :src="selfie"
+                height="100"
+                width="100"
+                stretch="aspectFill"
+                borderRadius="100%"
+              />
+            </StackLayout>
+          </FlexboxLayout>
+
+          <StackLayout top="80" left="0" padding="16" :width="$screen.widthDIPs" backgroundColor="#fff" borderRadius="32" marginLeft="8" marginRight="8" marginTop="8">
             <TextField
-              hint="Report"
               v-model="user_report"
+              @loaded="initMultiline"
+              hint="Report"
             />
 
             <MDButton
@@ -14,53 +33,45 @@
               backgroundColor="#757575"
               marginTop="8"
               text="Take Selfie"
-              @tap="onSelfieTap" 
+              @tap="onSelfieTap"
               variant="flat"
               padding="16 32"
               borderRadius="48"
               class="tx-bold" />
           </StackLayout>
-
-          <FlexboxLayout 
-          justifyContent="center"
-          :width="$screen.widthDIPs"
-            top="0"
-            left="0">
-            <Image
-              backgroundColor="#dcdcdc"
-              :src="selfie"
-              height="160"
-              width="160"
-              stretch="aspectFill"
-              borderRadius="100%"
-            />
-          </FlexboxLayout>
-        </AbsoluteLayout>
+        </StackLayout>
 
         <StackLayout backgroundColor="#fff" borderRadius="32" padding="16" margin="8">
-          <Label :text="`Coordinates:\n${gps_coords}`" class="tx-medium" fontSize="16" marginBottom="8" />
-          <Label :text="`Accuracy:\n${gps_accuracy}`" class="tx-medium" fontSize="16" marginBottom="8" />
-          <Label :text="`Timestamp:\n${gps_time}`" class="tx-medium" fontSize="16" marginBottom="8" />
+          <Label text="Coordinates:" class="tx-regular" fontSize="14"/>
+          <Label :text="gps_coords" class="tx-medium tx-primary" fontSize="16" marginBottom="8" textWrap="true" />
+          
+          <Label text="Accuracy:" class="tx-regular" fontSize="14"/>
+          <Label :text="gps_accuracy" class="tx-medium tx-primary" fontSize="16" marginBottom="8" textWrap="true" />
+          
+          <Label text="Timestamp:" class="tx-regular" fontSize="14"/>
+          <Label :text="gps_time" class="tx-medium tx-primary" fontSize="16" marginBottom="8" textWrap="true" />
 
           <MDButton
-                  color="white"
-                  backgroundColor="#757575"
+            marginTop="8"
+            color="white"
+            backgroundColor="#757575"
             text="Log GPS"
-            @tap="onGPSTap" 
+            @tap="onGPSTap"
             variant="flat"
             padding="16 32"
             borderRadius="48"
             class="tx-bold" />
         </StackLayout>
       </StackLayout>
-      
+
 
       <FlexboxLayout dock="bottom" justifyContent="flex-end" flexDirection="column">
         <FlexboxLayout justifyContent="center">
           <MDButton
             margin="24"
+            backgroundColor="#757575"
             text="Confirm"
-            @tap="onConfirmTap" 
+            @tap="onConfirmTap"
             variant="flat"
             padding="16 32"
             borderRadius="48"
@@ -80,6 +91,8 @@ import * as geolocation from 'nativescript-geolocation'
 import { Accuracy } from 'tns-core-modules/ui/enums'
 
 import { knownFolders, path } from 'file-system'
+
+const SQLite = require('nativescript-sqlite')
 
 export default {
   props: {
@@ -109,9 +122,28 @@ export default {
   computed: {
     ...mapState({
       config: state => state.config
-    })
+    }),
+    // buttonText() {
+    //   return this.action === 'in' ? 'Check In' : 'Check Out'
+    // },
+    // buttonColor() {
+    //   return this.action === 'in' ? '#2e7d32' : '#f9a825'
+    // }
   },
   methods: {
+    initMultiline(args) {
+      try {
+        const input = args.object.android
+
+        input.setSingleLine(false)
+        input.setMinLines(3)
+        input.setMaxLines(10)
+        input.setGravity(android.view.Gravity.TOP | android.view.Gravity.LEFT)
+        input.setInputType(android.text.InputType.TYPE_CLASS_TEXT | android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE)
+      } catch (error) {
+        console.error(error)
+      }
+    },
     async compressImage(images) {
       const vueInstance = this
 
@@ -125,7 +157,7 @@ export default {
         }
 
         let img_max_width_px = 800
-          
+
         if (this.config && this.config.hasOwnProperty('img_max_width_px')) {
           img_max_width_px = parseInt(this.config.img_max_width_px)
         }
@@ -133,16 +165,12 @@ export default {
         // Should come from config
         const format = image.substr(image.indexOf('.') + 1)
         const quality = parseInt(vueInstance.config.jpeg_quality)
-        
-        console.warn(Object.keys(e))
-        console.warn(e.orientation)
-        // e.options = {
-        //   width: img_max_width_px / this.$screen.scale,
-        //   height: img_max_width_px / this.$screen.scale,
-        // 
-        // }
 
-        console.warn('SelfieModal', { quality })
+        e.options = {
+          width: 800, // / this.$screen.scale,
+          height: 800, // / this.$screen.scale,
+          keepAspectRatio: true
+        }
 
         try {
           ImageSource.fromAsset(e)
@@ -155,6 +183,24 @@ export default {
 
               if (saved) {
                 vueInstance.selfie = filePath
+
+                new SQLite('offline_sync.db')
+                  .then(db => {
+                    try {
+                    db.execSQL('INSERT INTO files (filename, task_id, status) VALUES (?, ?, ?)', [ filePath, vueInstance.task_id, 'pending' ])
+                      .then(result => {
+                        console.warn('[SQLITE] Queue Image File', result)
+                      })
+                      .catch(error => console.error('writeText', error))
+                    } catch (error) {
+                      console.error(error)
+                    }
+                  })
+                  .catch(error => {
+                    vueInstance.$hideLoader()
+                    alert({ title: 'DB ERROR', message: error })
+                    console.error('[SQLITE] Queue Image File', error)
+                  })
               }
             } catch (error) {
               console.error('Compress Image', error)
@@ -176,10 +222,10 @@ export default {
       try {
         var takePictureHandler = this.takePictureHandler
         var scale = this.$screen.scale
-        
+
         // Fallback/Default
         let img_max_width_px = 800
-          
+
         if (this.config && this.config.hasOwnProperty('img_max_width_px')) {
           img_max_width_px = parseInt(this.config.img_max_width_px)
         }
@@ -228,7 +274,7 @@ export default {
                 longitude,
                 altitude
               } = loc
-              
+
               vueInstance.gps_coords = `${latitude},${longitude}`
               vueInstance.gps_accuracy = (horizontalAccuracy + verticalAccuracy) / 2
               vueInstance.gps_time = timestamp
@@ -260,41 +306,23 @@ export default {
         photo_req_check_in,
       } = this.config
 
-      console.warn('SelfieModal', {
-        gps_req_check_in,
-        photo_req_check_in,
-        selfie,
-        gps_coords,
-        gps_time,
-        gps_accuracy,
-        gps_alt,
-      })
-
       if (parseInt(photo_req_check_in) === 1 && selfie === null) {
+        alert('Selfie is required')
         return
       }
 
       if (parseInt(gps_req_check_in) === 1 && (gps_time === '' || gps_coords === '' || gps_accuracy === '' || gps_alt === '')) {
+        alert('GPS is required')
         return
       }
 
-      console.warn({
-        selfie,
+      this.$modal.close({
         gps_coords,
         gps_time,
         gps_accuracy,
         gps_alt,
       })
-      
-      // this.$modal.close({
-      //   gps_coords,
-
-      // })
     }
   }
 }
 </script>
-
-<style>
-
-</style>

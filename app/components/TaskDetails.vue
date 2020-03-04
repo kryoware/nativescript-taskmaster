@@ -47,7 +47,7 @@
               paddingLeft="0"
               paddingRight="0"
               class="tx-regular"
-              marginBottom="16" 
+              marginBottom="16"
             />
 
             <MDTextField
@@ -208,7 +208,7 @@ import AddReport from './AddReport'
 
 import * as fs from 'file-system'
 import { ImageSource } from 'tns-core-modules/image-source/image-source'
-import SelfieModalVue from './SelfieModal.vue'
+import SelfieModal from './SelfieModal'
 
 const SQLite = require('nativescript-sqlite')
 
@@ -260,7 +260,7 @@ export default {
           console.error('logs query', error)
         })
 
-      db.all(`SELECT filename FROM files WHERE status IN ('pending','done') AND task_id = ?`, [ this.task.task_id ])
+      db.all(`SELECT filename FROM files WHERE status IN ('pending','done') AND task_id = ? AND filename NOT LIKE "%_selfie_%"`, [ this.task.task_id ])
         .then(result => {
           console.warn('[SQLITE] Task Photos Query', result)
 
@@ -491,7 +491,7 @@ export default {
                   .catch(error => {
                     console.error('pause task update', error)
                   })
-                
+
               },
               error => {
                 console.error("[SQLITE] CONNECT: ", error)
@@ -548,7 +548,7 @@ export default {
       this.images = []
 
       new SQLite('offline_sync.db').then(db => {
-        db.all(`SELECT filename FROM files WHERE status IN ('pending','done') AND task_id = ?`, [ this.task.task_id ])
+        db.all(`SELECT filename FROM files WHERE status IN ('pending','done') AND task_id = ? AND filename NOT LIKE "%_selfie_%"`, [ this.task.task_id ])
           .then(result => {
             result.forEach(file => {
               let filename = file[0]
@@ -576,15 +576,6 @@ export default {
                   break
                 default:
                   vueInstance.images.push(filename)
-                  // ImageSource.fromFile(filename)
-                  //   .then(image => {
-                  //     console.warn('create image', image.android)
-
-                  //     this.images.push(image.android)
-                  //   })
-                  //   .catch(error => {
-                  //     console.error('create image', error)
-                  //   })
                   break
               }
             })
@@ -636,34 +627,38 @@ export default {
     },
     onCheckOutTap(args) {
       const vueInstance = this
-      this.isCheckedIn = false
 
-      geolocation.enableLocationRequest(true, true).then(() => {
-        geolocation.getCurrentLocation({
-          desiredAccuracy: Accuracy.high,
-          maximumAge: 5000,
-        })
-        .then(function (loc) {
+      this.$showModal(SelfieModal, {
+        fullscreen: true,
+        props: {
+          action: 'out',
+          task_id: this.task.task_id,
+          uid: this.user.uid
+        }
+      })
+      .then(result => {
+        if (result) {
+          const {
+            gps_alt,
+            gps_time,
+            gps_coords,
+            gps_accuracy,
+            user_report,
+          } = result
+
+          vueInstance.isCheckedIn = false
+
           try {
-            const {
-              horizontalAccuracy,
-              verticalAccuracy,
-              timestamp,
-              latitude,
-              longitude,
-              altitude
-            } = loc
-
             vueInstance.task_ = {
               ...vueInstance.task_,
               dt_log: moment().format('Y-MM-DD H:mm'),
               log_type: "check_out",
-              user_report: "", // FIXME: user_report
-              gps_coords: `${latitude},${longitude}`,
-              gps_accuracy: (horizontalAccuracy + verticalAccuracy) / 2,
-              gps_time: timestamp,
+              user_report,
+              gps_coords,
+              gps_accuracy,
+              gps_time,
+              gps_alt,
               gps_source: "gps",
-              gps_alt: altitude,
               task_id: vueInstance.task.task_id,
               task_status: 'done',
             }
@@ -706,48 +701,45 @@ export default {
               console.error("[SQLITE] CONNECT: ", error)
             })
           } catch (error) {
-            console.error('check in payload', error)
+            console.error('check out payload', error)
           }
-        }, function (e) {
-          console.error(e)
-        })
-      }, (e) => {
-        console.error('Error: ' + (e.message || e))
-      }).catch(ex => {
-        console.error('Unable to Enable Location', ex)
+
+        } else { alert('no data') }
       })
     },
     onCheckInTap(args) {
-      console.warn('checkintap')
-      // Change UI
-      this.isCheckedIn = true
       const vueInstance = this
 
-      geolocation.enableLocationRequest(true, true).then(() => {
-        geolocation.getCurrentLocation({
-          desiredAccuracy: Accuracy.high,
-          maximumAge: 5000,
-        })
-        .then(function (loc) {
-          console.warn('checkintap - loc')
+      this.$showModal(SelfieModal, {
+        fullscreen: true,
+        props: {
+          action: 'in',
+          task_id: this.task.task_id,
+          uid: this.user.uid
+        }
+      })
+      .then(result => {
+        if (result) {
+          const {
+            gps_alt,
+            gps_time,
+            gps_coords,
+            gps_accuracy,
+            user_report,
+          } = result
+
+          vueInstance.isCheckedIn = true
 
           try {
-            const {
-              horizontalAccuracy,
-              verticalAccuracy,
-              timestamp,
-              latitude,
-              longitude,
-            } = loc
-
             vueInstance.task_ = {
               ...vueInstance.task_,
               dt_log: moment().format('Y-MM-DD H:mm'),
               log_type: "check_in",
-              user_report: "", // FIXME: user_report
-              gps_coords: `${latitude},${longitude}`,
-              gps_accuracy: (horizontalAccuracy + verticalAccuracy) / 2,
-              gps_time: timestamp,
+              user_report,
+              gps_coords,
+              gps_accuracy,
+              gps_time,
+              gps_alt,
               gps_source: "gps",
               task_id: vueInstance.task.task_id,
               task_status: 'started',
@@ -789,13 +781,7 @@ export default {
           } catch (error) {
             console.error('check in payload', error)
           }
-        }, function (e) {
-          console.error(e)
-        })
-      }, (e) => {
-        console.error('Error: ' + (e.message || e))
-      }).catch(ex => {
-        console.error('Unable to Enable Location', ex)
+        } else { alert('no data') }
       })
     }
   }
