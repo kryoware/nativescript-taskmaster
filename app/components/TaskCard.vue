@@ -55,7 +55,7 @@ export default {
           background = 'rgb(100, 181, 246)'
           break;
         case 'pending':
-          background = 'white'
+          background = '#fff'
           break;
         case 'started':
           background = 'rgb(102, 207, 132)'
@@ -95,7 +95,7 @@ export default {
           background = 'rgb(100, 181, 246)'
           break;
         case 'pending':
-          background = ''
+          background = '#fff'
           break;
         case 'started':
           background = 'rgb(102, 207, 132)'
