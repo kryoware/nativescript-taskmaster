@@ -94,15 +94,15 @@ Vue.prototype.$callApi = (action, method, extras, headers) => {
     options = { ...options, ...{ body: JSON.stringify(extras) } }
   }
 
-  if (action != 'statcheck') {
-    Sentry.captureMessage('[API]', {
-      level: Level.Debug,
-      extra: {
-        params
-      }
-    })
-    console.warn('[API] ', { params })
-  }
+  // if (action != 'statcheck') {
+  //   Sentry.captureMessage('[API]', {
+  //     level: Level.Debug,
+  //     extra: {
+  //       params
+  //     }
+  //   })
+    console.warn('[API] ', { params: params.split('&') })
+  // }
 
   return fetch(`${url}/engine/api.php?${params}`, options)
 }
