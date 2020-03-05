@@ -1,39 +1,63 @@
 <template>
   <Page>
-    <DockLayout stretchLastChild="true" backgroundColor="#f5f5f5">
-      <StackLayout dock="top">
-        <StackLayout>
-          <FlexboxLayout marginTop="8"
-            justifyContent="center"
-            :width="$screen.widthDIPs"
-            top="0"
-            left="0">
-            <StackLayout height="116" width="116" backgroundColor="white" borderRadius="100%">
-              <Image
-                margin="8"
-                backgroundColor="#dcdcdc"
-                :src="selfie"
-                height="100"
-                width="100"
-                stretch="aspectFill"
-                borderRadius="100%"
-              />
-            </StackLayout>
-          </FlexboxLayout>
+    <ScrollView>
+      <DockLayout stretchLastChild="true" backgroundColor="#f5f5f5">
+        <StackLayout dock="top">
+          <StackLayout>
+            <FlexboxLayout marginTop="8"
+              justifyContent="center"
+              :width="$screen.widthDIPs"
+              top="0"
+              left="0">
+              <StackLayout height="116" width="116" backgroundColor="white" borderRadius="100%">
+                <Image
+                  margin="8"
+                  backgroundColor="#dcdcdc"
+                  :src="selfie"
+                  height="100"
+                  width="100"
+                  stretch="aspectFill"
+                  borderRadius="100%"
+                />
+              </StackLayout>
+            </FlexboxLayout>
 
-          <StackLayout top="80" left="0" padding="16" :width="$screen.widthDIPs" backgroundColor="#fff" borderRadius="32" marginLeft="8" marginRight="8" marginTop="8">
-            <TextField
-              v-model="user_report"
-              @loaded="initMultiline"
-              hint="Report"
-            />
+            <StackLayout top="80" left="0" padding="16" :width="$screen.widthDIPs" backgroundColor="#fff" borderRadius="32" marginLeft="8" marginRight="8" marginTop="8">
+              <TextField
+                v-model="user_report"
+                @loaded="initMultiline"
+                hint="Report"
+              />
+
+              <MDButton
+                color="white"
+                backgroundColor="#757575"
+                marginTop="8"
+                text="Take Selfie"
+                @tap="onSelfieTap"
+                variant="flat"
+                padding="16 32"
+                borderRadius="48"
+                class="tx-bold" />
+            </StackLayout>
+          </StackLayout>
+
+          <StackLayout backgroundColor="#fff" borderRadius="32" padding="16" margin="8">
+            <Label text="Coordinates:" class="tx-regular" fontSize="14"/>
+            <Label :text="gps_coords" class="tx-medium tx-primary" fontSize="16" marginBottom="8" textWrap="true" />
+            
+            <Label text="Accuracy:" class="tx-regular" fontSize="14"/>
+            <Label :text="gps_accuracy" class="tx-medium tx-primary" fontSize="16" marginBottom="8" textWrap="true" />
+            
+            <Label text="Timestamp:" class="tx-regular" fontSize="14"/>
+            <Label :text="gps_time" class="tx-medium tx-primary" fontSize="16" marginBottom="8" textWrap="true" />
 
             <MDButton
+              marginTop="8"
               color="white"
               backgroundColor="#757575"
-              marginTop="8"
-              text="Take Selfie"
-              @tap="onSelfieTap"
+              text="Log GPS"
+              @tap="onGPSTap"
               variant="flat"
               padding="16 32"
               borderRadius="48"
@@ -41,44 +65,22 @@
           </StackLayout>
         </StackLayout>
 
-        <StackLayout backgroundColor="#fff" borderRadius="32" padding="16" margin="8">
-          <Label text="Coordinates:" class="tx-regular" fontSize="14"/>
-          <Label :text="gps_coords" class="tx-medium tx-primary" fontSize="16" marginBottom="8" textWrap="true" />
-          
-          <Label text="Accuracy:" class="tx-regular" fontSize="14"/>
-          <Label :text="gps_accuracy" class="tx-medium tx-primary" fontSize="16" marginBottom="8" textWrap="true" />
-          
-          <Label text="Timestamp:" class="tx-regular" fontSize="14"/>
-          <Label :text="gps_time" class="tx-medium tx-primary" fontSize="16" marginBottom="8" textWrap="true" />
 
-          <MDButton
-            marginTop="8"
-            color="white"
-            backgroundColor="#757575"
-            text="Log GPS"
-            @tap="onGPSTap"
-            variant="flat"
-            padding="16 32"
-            borderRadius="48"
-            class="tx-bold" />
-        </StackLayout>
-      </StackLayout>
-
-
-      <FlexboxLayout dock="bottom" justifyContent="flex-end" flexDirection="column">
-        <FlexboxLayout justifyContent="center">
-          <MDButton
-            margin="24"
-            backgroundColor="#757575"
-            text="Confirm"
-            @tap="onConfirmTap"
-            variant="flat"
-            padding="16 32"
-            borderRadius="48"
-            class="tx-bold" />
+        <FlexboxLayout dock="bottom" justifyContent="flex-end" flexDirection="column">
+          <FlexboxLayout justifyContent="center">
+            <MDButton
+              margin="24"
+              backgroundColor="#757575"
+              text="Confirm"
+              @tap="onConfirmTap"
+              variant="flat"
+              padding="16 32"
+              borderRadius="48"
+              class="tx-bold" />
+          </FlexboxLayout>
         </FlexboxLayout>
-      </FlexboxLayout>
-    </DockLayout>
+      </DockLayout>
+    </ScrollView>
   </Page>
 </template>
 
