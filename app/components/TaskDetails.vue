@@ -315,14 +315,16 @@ export default {
         const values = [
           this.task_.instructions,
           this.task_.location,
-          this.task_.notes
+          this.task_.notes,
+          this.task_.task_id,
         ]
 
         new SQLite('offline_sync.db').then(db => {
-          db.execSQL(`UPDATE tasks SET status = 'pending',
+          db.execSQL(`UPDATE tasks SET task_status = 'pending',
               instructions = ?,
               location = ?,
               notes = ?
+              WHERE task_id = ?
             `, values)
             .then(result => {
               console.warn('data_log', result)
@@ -362,7 +364,7 @@ export default {
               vueInstance.task_ = {
                 ...vueInstance.task_,
                 dt_log: moment().format('Y-MM-DD H:mm'),
-                log_type: "check_out",
+                log_type: "check_in",
                 user_report: "", // FIXME: user_report
                 gps_coords: `${latitude},${longitude}`,
                 gps_accuracy: (horizontalAccuracy + verticalAccuracy) / 2,
@@ -370,7 +372,7 @@ export default {
                 gps_source: "gps",
                 gps_alt: altitude,
                 task_id: vueInstance.task.task_id,
-                task_status: 'done',
+                task_status: 'resumed',
               }
 
               const values = [
@@ -387,7 +389,7 @@ export default {
 
               new SQLite('offline_sync.db').then(db => {
                 // FIXME: Check this status
-                db.execSQL(`UPDATE tasks SET status = 'started'`)
+                db.execSQL(`UPDATE tasks SET task_status = 'started' WHERE task_id = ?`, vueInstance.task_.task_id)
                   .then(result => {
                     console.warn('resume task', result)
                     console.warn(vueInstance.task_)
@@ -457,7 +459,7 @@ export default {
                 gps_source: "gps",
                 gps_alt: altitude,
                 task_id: vueInstance.task.task_id,
-                task_status: 'done',
+                task_status: 'paused',
               }
 
               const values = [
@@ -473,7 +475,7 @@ export default {
               ]
 
               new SQLite('offline_sync.db').then(db => {
-                db.execSQL(`UPDATE tasks SET status = 'paused'`)
+                db.execSQL(`UPDATE tasks SET task_status = 'paused' WHERE task_id = ?`, vueInstance.task_.task_id)
                   .then(result => {
                     console.warn('pause task', result)
                     console.warn(vueInstance.task_)

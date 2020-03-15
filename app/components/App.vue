@@ -160,7 +160,7 @@
           </StackLayout>
         </StackLayout>
 
-        <!-- <MDBottomNavigationBar
+        <MDBottomNavigationBar
           class="paper-tp"
           row="1"
           activeColor="#2e7d32"
@@ -169,7 +169,7 @@
           @tabSelected="tabSelected">
           <MDBottomNavigationTab title="Tasks" icon="ic_task" />
           <MDBottomNavigationTab title="Debug" icon="ic_info" />
-        </MDBottomNavigationBar> -->
+        </MDBottomNavigationBar>
 
       </GridLayout>
     </StackLayout>
@@ -264,7 +264,7 @@ export default {
       tasks: state => state.tasks,
       config: state => state.config,
       dt_tasks: state => state.dt_tasks,
-      dt_config: state => state.dt_config,
+      dt_config: state => state.config.dt_config,
       permissions: state => state.permissions,
     }),
     sortedTasks() {
@@ -273,7 +273,7 @@ export default {
       const test = [].concat(
         this.tasks.filter(task => task.task_status === 'pending'),
         this.tasks.filter(task => task.task_status === 'paused'),
-        this.tasks.filter(task => task.task_status === 'started'),  
+        this.tasks.filter(task => task.task_status === 'started'),
         this.tasks.filter(task => task.task_status === 'done'),
       )
 
@@ -324,28 +324,25 @@ export default {
 
         if (! vueInstance.database) {
           new SQLite('offline_sync.db').then(db => {
-              vueInstance.database = db
+            vueInstance.database = db
 
-              db.all("SELECT * FROM data_logs")
-                .then(result => {
-                  console.warn(result)
-                })
-                .catch(error => console.error('[APP] Task Data', eror))
+            db.all("SELECT status FROM files")
+              .then(result => {
+                if (result.length > 0) {
+                  console.warn('[APP] Total Files: ' + result.length)
+                  console.warn('[APP] Pending Files: ', result)
+                }
+              })
+              .catch(error => {
+                console.error('[APP] Files', error)
+              })
 
-              db.all("SELECT status FROM files")
-                .then(result => {
-                  // console.warn('[APP] Total Files: ' + result.length)
-                  // console.warn('[APP] Total Files: ' + result.length)
-                })
-                .catch(error => {
-                  console.error('[APP] Files', error)
-                })
+            db.all("SELECT * FROM tasks")
+              .then(result => {
+                if (result.length >= 0) {
+                  console.warn('[APP] Total Tasks: ' + result.length)
 
-              db.all("SELECT * FROM tasks")
-                .then(result => {
-                  if (result.length >= 0) {
-                    console.warn('[APP] Total Tasks: ' + result.length)
-            
+                  if (result.length > 0) {
                     let localTasks = []
 
                     result.forEach(row => {
@@ -377,18 +374,20 @@ export default {
                         console.error('[SQLITE] Convert to VUEX Task', error)
                       }
                     })
-                    
+
                     console.warn('[APP] Temporary Tasks')
                     console.warn({ localTasks: localTasks.filter(task => task.task_id.indexOf('t') != -1) })
 
                     vueInstance.setTasks(localTasks)
+
                   }
-                })
-                .catch(error => {
-                  console.error('[SQLITE] Get Tasks: ', error)
-                })
-            },
-            error => console.error("[SQLITE] CONNECT: ", error))
+                }
+              })
+              .catch(error => {
+                console.error('[SQLITE] Get Tasks: ', error)
+              })
+          },
+          error => console.error("[SQLITE] CONNECT: ", error))
         }
       }
 
@@ -512,7 +511,7 @@ export default {
                     })
                     .catch(error => {
                       console.error('DATA UPLOAD', error)
-                      
+
                       this.isUploadingData = false
                     })
                 } catch (error) {
@@ -554,7 +553,6 @@ export default {
               task.gps_coords,
               task.sched_day,
               task.sched_time,
-              'done'
             ]
 
             const query = `INSERT INTO tasks ( schedule, task_start, task_end, task_status, task_time_allocated, assigned_to, customer, task_id, uid, task_tag, task_title, task_des, instructions, notes, location, gps_coords, sched_day, sched_time, status) VALUES( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
@@ -565,25 +563,26 @@ export default {
               })
               .catch(error => {
                 console.error('[+TASK] ', error)
+                console.error('[TASK UPDATE', [ task.task_id, task.task_tag ])
 
                 // Attempt to update local copy
-                // vueInstance.database.execSQL("SELECT id FROM tasks WHERE task_id = ?", [ values.task_id ])
-                //   .then(result => {
-                //     console.warn('[TASK UPDATE] ', result)
+                vueInstance.database.execSQL("SELECT id FROM tasks WHERE task_id = ? OR task_tag = ?", [ task.task_id, task.task_tag ])
+                  .then(result => {
+                    console.warn('[TASK UPDATE] ', result)
 
-                //     // Update where id = result
-                //     vueInstance.database.execSQL("UPDATE tasks SET schedule = ?, task_start = ?, task_end = ?, task_status = ?, task_time_allocated = ?, assigned_to = ?, customer = ?, task_id = ?, uid = ?, task_tag = ?, task_title = ?, task_des = ?, instructions = ?, notes = ?, location = ?, gps_coords = ?, sched_day = ?, sched_time = ? WHERE task_id = ?",
-                //       [ values, ...[values.task_id] ])
-                //       .then(result => {
-                //         console.warn('task update query result: ', result)
-                //       })
-                //       .catch(error => {
-                //         console.error('task update query error: ', error)
-                //       })
-                //   })
-                //   .error(error => {
-                //     console.error('[TASK UPDATE] ', error)
-                //   })
+                    // Update where id = result
+                    vueInstance.database.execSQL("UPDATE tasks SET schedule = ?, task_start = ?, task_end = ?, task_status = ?, task_time_allocated = ?, assigned_to = ?, customer = ?, task_id = ?, uid = ?, task_tag = ?, task_title = ?, task_des = ?, instructions = ?, notes = ?, location = ?, gps_coords = ?, sched_day = ?, sched_time = ? WHERE task_id = ?",
+                      [ values, ...[values.task_id] ])
+                      .then(result => {
+                        console.warn('task update query result: ', result)
+                      })
+                      .catch(error => {
+                        console.error('task update query error: ', error)
+                      })
+                  })
+                  .error(error => {
+                    console.error('[TASK UPDATE] ', error)
+                  })
               })
             },
             error => console.error("[SQLITE] CONNECT: ", error))
@@ -894,7 +893,6 @@ export default {
       this.intervals.forEach(intervalId => clearInterval(intervalId))
     },
     async statCheck() {
-      return
       console.warn('[APP] statCheck')
       const vueInstance = this
 
@@ -910,45 +908,39 @@ export default {
               if (res.stat.toLowerCase() === "update" && res.data) {
                 // update config
                 if (res.data.configs) {
+                  console.warn(Object.keys(vueInstance.config))
+                  console.warn(vueInstance.config.dt_config)
                   console.warn('[APP] statCheck: New Config')
-                  console.warn(res.data.configs)
 
                   vueInstance.setConfig(res.data.configs)
                   vueInstance.$appSettings.setString('config', JSON.stringify(res.data.configs))
                 }
 
                 // update tasks
-                if (res.data.tasks) {
+                if (res.data.hasOwnProperty('tasks')) {
                   console.warn('[APP] statCheck: New Tasks')
-                  let tasks = Object.values(res.data.tasks)
-                    .map(task => {
-                      // try {
-                      //   if (parseInt(task.uid) === 0 || task.status === 'pending') {
-                      //     const currTask = vueInstance.tasks.filter(vTask => {
-                      //       console.warn({vTask})
-
-                      //       return vTask.task_id === task.task_id
-                      //     })
-
-                      //     console.warn('--- BEFORE ---')
-                      //     console.warn({ task })
-                      //     task = { ...currTask, ...task }
-                      //     console.warn('--- AFTER ---')
-                      //     console.warn({ task })
-                      //   }
-                      // } catch (error) {
-                      //   console.error(error)
-                      // }
-
-                      return task
-                    })
 
                   try {
+                    let tasks = Object.values(res.data.tasks).forEach(task => {
+                      try {
+                        console.warn({ task })
+
+                        const localTask = vueInstance.tasks.filter(vTask => {
+                          return vTask.task_tag === task.task_tag && vTask.task_id === task.task_id
+                        })[0]
+
+                        console.warn({ task: localTask })
+                        console.warn('-----------------------------------------------------------------------------')
+                      } catch (error) {
+                        console.error('offline task update', error)
+                      }
+                    })
+
                     vueInstance.setTaskTimestamp(res.data.dt_tasks)
                     vueInstance.setTasks(tasks)
                     vueInstance.saveTasks(tasks)
                   } catch (error) {
-                    console.error(error)
+                    console.error('update local task state', error)
                   }
                 }
               }
@@ -966,7 +958,7 @@ export default {
       if (this.isUploadingData) return
 
       this.isUploadingData = true
-      
+
       let limit =  50 // default
       if (this.config != null) {
         limit = this.config.hasOwnProperty('data_batch_upload') ? this.config.data_batch_upload : limit
@@ -1023,7 +1015,7 @@ export default {
 
                     result.forEach((row, index)  => {
                       filesToDelete.push(row[0])
-                      
+
                       let mime = row[1].substr(row[1].lastIndexOf('.') + 1).toLowerCase()
                       body.push({
                         name: '' + (parseInt(index) + 1),
@@ -1038,11 +1030,9 @@ export default {
 
                     task.on('progress', e => {})
                     task.on('responded', e => {
-                      console.warn('UPLOAD RESPONDED', e)
                     })
 
                     task.on('complete', e => {
-                      console.warn('UPLOAD COMPLETE', e)
                       vueInstance.database.execSQL('UPDATE files SET status = ? WHERE id IN ('.concat(
                           filesToDelete.join(','),
                           ')'
@@ -1161,7 +1151,7 @@ export default {
       this.setRunning(true)
 
       console.warn('[JOBS] Start processing')
-      
+
       try {
         console.warn('[APP] Running: uploadLocalFiles - '.concat(vueInstance.config.int_upload_files, ' secs'))
         vueInstance.intervals.push(
