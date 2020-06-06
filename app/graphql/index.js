@@ -1,7 +1,7 @@
 import gql from 'graphql-tag'
 
 export const LOGIN = gql`
-  query login (
+  mutation login (
     $username: String!
     $password: String!
     $type: Int!
